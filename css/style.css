@@ -713,6 +713,59 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .vocab-item rt { font-size: 9.5px; color: var(--accent); font-weight: 500; letter-spacing: .02em; }
 .vocab-item > span { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- 자동 학습(핸즈프리 재생) ---------- */
+.setup-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px 22px; margin-top: 22px; }
+@media (max-width: 560px) { .setup-grid { grid-template-columns: 1fr; } }
+.setup-grid > div > label { display: block; font-size: 13px; font-weight: 700; color: var(--ink-soft); margin: 0 2px 9px; letter-spacing: .02em; }
+.seg-wide { display: flex; width: 100%; }
+.seg-wide button { flex: 1; }
+
+.auto-run { max-width: 640px; margin: 0 auto; }
+.auto-card {
+  padding: 44px 30px; min-height: 290px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+.auto-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.auto-chapter { font-size: 12px; color: var(--muted); }
+.auto-jp {
+  font-family: var(--font-jp); font-weight: 600; line-height: 1.7; margin: 6px 0 0;
+  font-size: clamp(22px, 4.6vw, 30px); letter-spacing: .01em;
+  transition: color .2s; overflow-wrap: anywhere;
+}
+.auto-ko {
+  font-size: clamp(15px, 3vw, 17px); color: var(--ink-soft); line-height: 1.6; margin: 0;
+  transition: color .2s, opacity .2s; overflow-wrap: anywhere;
+}
+.auto-jp.now, .auto-ko.now { color: var(--accent); }
+
+.auto-controls { display: flex; align-items: center; justify-content: center; gap: 26px; margin-top: 24px; }
+.auto-ctrl {
+  display: grid; place-items: center;
+  width: 56px; height: 56px; border-radius: 50%;
+  color: var(--ink-soft); background: var(--surface); border: 1px solid var(--line-strong);
+  transition: transform .12s, border-color .15s, color .15s, background .15s;
+}
+.auto-ctrl:hover { border-color: var(--ink-soft); color: var(--ink); }
+.auto-ctrl:active { transform: scale(.9); }
+.auto-main {
+  width: 76px; height: 76px;
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+  box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.auto-main:hover { background: var(--accent-deep); color: var(--accent-ink); border-color: var(--accent-deep); }
+
+.auto-live { display: flex; justify-content: center; gap: 8px; margin-top: 22px; flex-wrap: wrap; }
+.auto-live button {
+  padding: 7px 15px; border-radius: 99px;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  transition: all .15s; font-variant-numeric: tabular-nums;
+}
+.auto-live button:hover { border-color: var(--ink-soft); color: var(--ink); }
+.auto-live button.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
+
 /* ---------- 문법 색인 ---------- */
 .gi-item .gi-formula { font-size: 17px; font-weight: 700; margin: 0 0 2px; }
 .gi-item .gi-gist { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.5; }

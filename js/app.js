@@ -43,7 +43,10 @@ const defaultState = () => ({
   streak: { last: '', count: 0 },
   today: { date: '', ns: {} }, // 오늘 학습한 문장 번호
   lastChapter: 0,
-  settings: { theme: 'auto', scale: 1, hideMode: 'all' },
+  settings: {
+    theme: 'auto', scale: 1, hideMode: 'all',
+    auto: { src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false },
+  },
 });
 
 let S = defaultState();
@@ -52,6 +55,7 @@ try {
   if (raw) {
     const saved = JSON.parse(raw);
     S = Object.assign(defaultState(), saved, { settings: Object.assign(defaultState().settings, saved.settings || {}) });
+    S.settings.auto = Object.assign(defaultState().settings.auto, S.settings.auto || {});
   }
 } catch (e) { /* 손상된 데이터는 무시하고 초기 상태 사용 */ }
 
@@ -112,20 +116,25 @@ function toast(msg) {
 }
 
 /* ---------- TTS ---------- */
-let jaVoice = null;
+const hasTTS = 'speechSynthesis' in window;
+let jaVoice = null, koVoice = null;
 function pickVoice() {
-  if (!('speechSynthesis' in window)) return;
+  if (!hasTTS) return;
   const vs = speechSynthesis.getVoices();
   jaVoice = vs.find(v => /^ja([-_]|$)/i.test(v.lang) && /google/i.test(v.name))
     || vs.find(v => /^ja([-_]|$)/i.test(v.lang)) || null;
+  koVoice = vs.find(v => /^ko([-_]|$)/i.test(v.lang) && /google/i.test(v.name))
+    || vs.find(v => /^ko([-_]|$)/i.test(v.lang)) || null;
 }
-if ('speechSynthesis' in window) {
+if (hasTTS) {
   pickVoice();
   speechSynthesis.addEventListener('voiceschanged', pickVoice);
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 function speak(text, btn) {
-  if (!('speechSynthesis' in window)) { toast('이 브라우저는 음성 재생을 지원하지 않아요'); return; }
+  if (!hasTTS) { toast('이 브라우저는 음성 재생을 지원하지 않아요'); return; }
   speechSynthesis.cancel();
   $$('.s-btn.speaking').forEach(b => b.classList.remove('speaking'));
   const u = new SpeechSynthesisUtterance(text);
@@ -139,6 +148,25 @@ function speak(text, btn) {
   speechSynthesis.speak(u);
 }
 
+// 자동 학습용: 한 문장을 끝까지 읽고 끝나면 resolve (취소·오류·안전 타임아웃 포함)
+function speakAsync(text, lang, rate) {
+  return new Promise(resolve => {
+    if (!hasTTS) { setTimeout(resolve, 700); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    const v = lang.indexOf('ja') === 0 ? jaVoice : koVoice;
+    if (v) u.voice = v;
+    u.rate = rate;
+    let done = false;
+    const fin = () => { if (!done) { done = true; clearTimeout(guard); resolve(); } };
+    u.onend = fin;
+    u.onerror = fin;
+    // 일부 브라우저에서 onend가 누락되는 경우를 대비한 안전 장치
+    const guard = setTimeout(fin, 3000 + Math.ceil(text.length * 320 / rate));
+    try { speechSynthesis.speak(u); } catch (e) { fin(); }
+  });
+}
+
 /* ---------- 공용 템플릿 ---------- */
 const ICON = {
   play: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>',
@@ -147,6 +175,16 @@ const ICON = {
   starFill: '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z"/></svg>',
   x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   arrowR: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>',
+  playFill: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+};
+
+// 자동 학습 플레이어 전용 아이콘(크게)
+const PLY = {
+  play: '<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M7 5h3.4v14H7zM13.6 5H17v14h-3.4z"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 5h2.2v14H6z"/><path d="M20 5v14l-10-7z"/></svg>',
+  next: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M4 5v14l10-7z"/><path d="M15.8 5H18v14h-2.2z"/></svg>',
+  replay: '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v4h4"/></svg>',
 };
 
 const levelChip = lv => `<span class="chip lv-${lv}">${lv}</span>`;
@@ -207,8 +245,9 @@ function viewHome() {
             <a class="btn btn-primary btn-lg" href="#/study/${resume.id}">
               ${total === 0 ? '학습 시작하기' : '이어서 학습하기'} ${ICON.arrowR}
             </a>
-            <span class="resume-meta"><b>${pad2(resume.id)}. ${esc(resume.title)}</b> · ${rp.done}/${rp.total} 문장</span>
+            <a class="btn btn-ghost btn-lg" href="#/auto">${ICON.playFill}<span style="margin-left:6px">자동 학습</span></a>
           </div>
+          <p class="resume-meta" style="margin:12px 0 0"><b>${pad2(resume.id)}. ${esc(resume.title)}</b> · ${rp.done}/${rp.total} 문장</p>
         </div>
         ${ringSvg(pct)}
       </div>
@@ -246,6 +285,9 @@ function viewHome() {
 
     <div class="section-head"><h2>바로 가기</h2></div>
     <div class="option-grid">
+      <a class="option-card" href="#/auto">
+        <b>자동 학습 — <span class="jp">自動再生</span></b><span>듣기만 해도 되는 핸즈프리 음성 재생</span>
+      </a>
       <a class="option-card" href="#/quiz?src=random">
         <b>랜덤 20문장 암기</b><span>전체 범위에서 무작위로 카드 테스트</span>
       </a>
@@ -426,6 +468,7 @@ function viewStudy(id) {
         <button class="${mode === 'hideJp' ? 'active' : ''}" data-action="hide-mode" data-mode="hideJp">일본어 가리기</button>
       </div>
       <div class="right">
+        <button class="btn btn-sm btn-ghost" data-action="auto-quick" data-ch="${ch.id}">${ICON.playFill}<span style="margin-left:5px">자동 재생</span></button>
         <a class="btn btn-sm btn-ghost" href="#/quiz?src=chapter&ch=${ch.id}">이 과 암기 →</a>
       </div>
     </div>
@@ -608,6 +651,207 @@ function answerQuiz(ok) {
   render();
 }
 
+/* ---------- 자동 학습(핸즈프리 음성 재생) ---------- */
+let autoPlayer = null;   // { items, idx, playing, finished, started, readKo, repeat, rate, gap, loop }
+let autoToken = 0;       // 실행 중인 루프 식별 토큰(취소/점프 시 증가)
+
+function autoPool(src, ch) {
+  if (src === 'all') return SENTENCES.map(s => s.n);
+  if (src === 'chapter') { const c = chapterOf(ch); return c ? SENTENCES.slice(c.start - 1, c.end).map(s => s.n) : []; }
+  if (src === 'book') return bookmarkList();
+  if (src === 'weak') return weakList();
+  return [];
+}
+
+function viewAutoSetup() {
+  const a = S.settings.auto;
+  const bookN = bookmarkList().length, weakN = weakList().length;
+  const srcCard = (key, title, sub, count, disabled) => `
+    <button class="option-card ${a.src === key ? 'active' : ''}" data-action="auto-src" data-src="${key}" ${disabled ? 'disabled' : ''}>
+      <b>${title}</b><span>${sub}</span>${count != null ? `<span class="count">${count}</span>` : ''}
+    </button>`;
+  const seg = (key, opts) => `<div class="seg seg-wide">${opts.map(([v, l]) =>
+    `<button class="${String(a[key]) === String(v) ? 'active' : ''}" data-action="auto-set" data-key="${key}" data-val="${v}">${l}</button>`).join('')}</div>`;
+
+  return `
+  <div class="view quiz-setup">
+    <h1 class="page-title">자동 학습 — 自動再生</h1>
+    <p class="page-sub">손대지 않아도 카드가 저절로 넘어가며 일본어와 한국어를 차례로 읽어 줍니다. 출퇴근·설거지·잠들기 전 듣기 연습에 좋아요.</p>
+
+    <div class="setup-row"><label>재생 범위</label>
+      <div class="option-grid">
+        ${srcCard('chapter', '챕터', '한 과(20문장)를 순서대로')}
+        ${srcCard('all', '전체 1000', '1과부터 끝까지 이어 듣기')}
+        ${srcCard('book', '북마크', '북마크한 문장만', bookN, bookN === 0)}
+        ${srcCard('weak', '복습 대기', '틀렸던 문장만', weakN, weakN === 0)}
+      </div>
+    </div>
+
+    ${a.src === 'chapter' ? `
+    <div class="setup-row"><label>챕터</label>
+      <div class="select-wrap"><select data-action="auto-ch">
+        ${CHAPTERS.map(c => `<option value="${c.id}" ${a.ch === c.id ? 'selected' : ''}>${pad2(c.id)}. ${esc(c.title)} (${c.level})</option>`).join('')}
+      </select></div>
+    </div>` : ''}
+
+    <div class="setup-row"><label>한국어 음성</label>${seg('readKo', [[true, '일본어 + 한국어'], [false, '일본어만']])}</div>
+
+    <div class="setup-grid">
+      <div><label>일본어 반복</label>${seg('repeat', [[1, '1회'], [2, '2회'], [3, '3회']])}</div>
+      <div><label>재생 속도</label>${seg('rate', [[0.7, '느리게'], [0.9, '보통'], [1.1, '빠르게']])}</div>
+      <div><label>문장 간격</label>${seg('gap', [[400, '짧게'], [900, '보통'], [1600, '길게']])}</div>
+      <div><label>반복 재생</label>${seg('loop', [[false, '끄기'], [true, '켜기']])}</div>
+    </div>
+
+    <div class="quiz-start-row">
+      <button class="btn btn-primary btn-lg" data-action="auto-start">${PLY.play}<span style="margin-left:6px">재생 시작</span></button>
+      <span class="quiz-hint">${hasTTS ? '<kbd>Space</kbd> 재생/정지 · <kbd>←</kbd>/<kbd>→</kbd> 이동' : '⚠ 이 브라우저는 음성 재생을 지원하지 않습니다'}</span>
+    </div>
+  </div>`;
+}
+
+function autoCardBody(s) {
+  const ch = chapterOf(s.ch);
+  return `
+    <div class="auto-card-top">
+      <span class="s-num jp">${pad4(s.n)}</span>${levelChip(ch.level)}${ptChip(s.pt)}
+      <span class="auto-chapter">${pad2(ch.id)}. ${esc(ch.title)}</span>
+    </div>
+    <p class="auto-jp jp" id="auto-jp">${esc(s.jp)}</p>
+    <p class="auto-ko" id="auto-ko">${esc(s.ko)}</p>`;
+}
+
+function viewAutoRun() {
+  const A = autoPlayer;
+  const s = sentence(A.items[A.idx]);
+  return `
+  <div class="view auto-run">
+    <div class="quiz-top">
+      <button class="icon-btn" data-action="auto-exit" aria-label="닫기" title="닫기">${ICON.x}</button>
+      <div class="bar"><i id="auto-bar" style="width:0%"></i></div>
+      <span class="q-count" id="auto-count">1 / ${A.items.length}</span>
+    </div>
+
+    <section class="card auto-card" id="auto-card-body">${autoCardBody(s)}</section>
+
+    <div class="auto-controls">
+      <button class="auto-ctrl" data-action="auto-prev" aria-label="이전 문장">${PLY.prev}</button>
+      <button class="auto-ctrl auto-main" id="auto-play-btn" data-action="auto-toggle" aria-label="재생/정지">${PLY.play}</button>
+      <button class="auto-ctrl" data-action="auto-next" aria-label="다음 문장">${PLY.next}</button>
+    </div>
+
+    <div class="auto-live">
+      <button id="auto-rate-btn" data-action="auto-live" data-key="rate">${A.rate}×</button>
+      <button id="auto-ko-btn" class="${A.readKo ? 'on' : ''}" data-action="auto-live" data-key="readKo">한국어 음성</button>
+      <button id="auto-loop-btn" class="${A.loop ? 'on' : ''}" data-action="auto-live" data-key="loop">반복 재생</button>
+    </div>
+    <p class="quiz-kbd"><kbd>Space</kbd> 재생/정지 · <kbd>←</kbd> 이전 · <kbd>→</kbd> 다음</p>
+  </div>`;
+}
+
+function setAutoSpeaking(which) {
+  const jp = $('#auto-jp'), ko = $('#auto-ko');
+  if (jp) jp.classList.toggle('now', which === 'jp');
+  if (ko) ko.classList.toggle('now', which === 'ko');
+}
+
+function updateAutoControls() {
+  const A = autoPlayer; if (!A) return;
+  const rb = $('#auto-rate-btn'); if (rb) rb.textContent = A.rate + '×';
+  const kb = $('#auto-ko-btn'); if (kb) kb.classList.toggle('on', A.readKo);
+  const lb = $('#auto-loop-btn'); if (lb) lb.classList.toggle('on', A.loop);
+}
+
+function updateAutoUI() {
+  const A = autoPlayer; if (!A) return;
+  const s = sentence(A.items[A.idx]);
+  const body = $('#auto-card-body'); if (body) body.innerHTML = autoCardBody(s);
+  const bar = $('#auto-bar'); if (bar) bar.style.width = ((A.idx + (A.finished ? 1 : 0)) / A.items.length * 100) + '%';
+  const cnt = $('#auto-count'); if (cnt) cnt.textContent = A.finished ? `${A.items.length} / ${A.items.length} · 완료` : `${A.idx + 1} / ${A.items.length}`;
+  const pb = $('#auto-play-btn'); if (pb) pb.innerHTML = A.finished ? PLY.replay : (A.playing ? PLY.pause : PLY.play);
+  updateAutoControls();
+}
+
+async function autoRun() {
+  const A = autoPlayer; if (!A) return;
+  const myToken = ++autoToken;
+  A.playing = true; A.finished = false;
+  updateAutoUI();
+  const alive = () => A === autoPlayer && A.playing && myToken === autoToken;
+  while (alive() && A.idx < A.items.length) {
+    const n = A.items[A.idx], s = sentence(n);
+    for (let r = 0; r < A.repeat; r++) {
+      if (!alive()) return;
+      setAutoSpeaking('jp');
+      await speakAsync(s.jp, 'ja-JP', A.rate);
+      if (!alive()) return;
+      if (r < A.repeat - 1) await sleep(260);
+    }
+    if (A.readKo) {
+      if (!alive()) return;
+      await sleep(300);
+      if (!alive()) return;
+      setAutoSpeaking('ko');
+      await speakAsync(s.ko, 'ko-KR', A.rate);
+    }
+    if (!alive()) return;
+    setAutoSpeaking(null);
+    if (!S.learned[n]) S.learned[n] = 1;
+    touchActivity(n); save();
+    await sleep(A.gap);
+    if (!alive()) return;
+    if (A.idx + 1 >= A.items.length) {
+      if (A.loop) { A.idx = 0; updateAutoUI(); }
+      else { A.playing = false; A.finished = true; updateAutoUI(); toast('자동 학습을 마쳤어요'); return; }
+    } else {
+      A.idx++; updateAutoUI();
+    }
+  }
+}
+
+function autoToggle() {
+  const A = autoPlayer; if (!A) return;
+  if (!hasTTS) { toast('이 브라우저는 음성 재생을 지원하지 않아요'); return; }
+  if (A.finished) { A.idx = 0; autoRun(); return; }
+  if (A.playing) autoPause(); else autoRun();
+}
+function autoPause() {
+  const A = autoPlayer; if (!A) return;
+  A.playing = false; autoToken++;
+  if (hasTTS) speechSynthesis.cancel();
+  setAutoSpeaking(null); updateAutoUI();
+}
+function autoJump(d) {
+  const A = autoPlayer; if (!A) return;
+  A.idx = Math.min(Math.max(A.idx + d, 0), A.items.length - 1);
+  A.finished = false; autoToken++;
+  if (hasTTS) speechSynthesis.cancel();
+  if (A.playing) autoRun(); else updateAutoUI();
+}
+function autoStop() {
+  if (!autoPlayer) return;
+  autoPlayer.playing = false; autoToken++;
+  if (hasTTS) speechSynthesis.cancel();
+  autoPlayer = null;
+}
+function startAuto() {
+  const cfg = S.settings.auto;
+  const items = autoPool(cfg.src, cfg.ch);
+  if (!items.length) { toast('재생할 문장이 없어요'); return; }
+  autoPlayer = {
+    items, idx: 0, playing: false, finished: false, started: false,
+    readKo: cfg.readKo, repeat: cfg.repeat, rate: cfg.rate, gap: cfg.gap, loop: cfg.loop,
+  };
+  if (location.hash === '#/auto/run') render(); else location.hash = '#/auto/run';
+}
+function autoLive(key) {
+  const A = autoPlayer, cfg = S.settings.auto; if (!A) return;
+  if (key === 'rate') { const seq = [0.7, 0.9, 1.1]; A.rate = cfg.rate = seq[(seq.indexOf(A.rate) + 1) % seq.length]; }
+  else if (key === 'readKo') { A.readKo = cfg.readKo = !A.readKo; }
+  else if (key === 'loop') { A.loop = cfg.loop = !A.loop; }
+  save(); updateAutoControls();
+}
+
 /* ---------- 뷰: 검색 ---------- */
 let searchQuery = '';
 function searchResults(q) {
@@ -703,6 +947,9 @@ function render() {
   let html = '';
   let nav = 'home';
 
+  // 자동 학습 재생 화면을 벗어나면 재생 중지
+  if (autoPlayer && !(page === 'auto' && seg[1] === 'run')) autoStop();
+
   if (page === 'home') { html = viewHome(); nav = 'home'; }
   else if (page === 'chapters') {
     if (params.get('tab')) chaptersTab = params.get('tab') === 'grammar' ? 'grammar' : 'list';
@@ -727,6 +974,18 @@ function render() {
     }
     html = viewQuizSetup(); nav = 'quiz';
   }
+  else if (page === 'auto' && seg[1] === 'run') {
+    if (!autoPlayer) { location.hash = '#/auto'; return; }
+    html = viewAutoRun(); nav = 'auto';
+  }
+  else if (page === 'auto') {
+    const asrc = params.get('src');
+    if (asrc && ['chapter', 'all', 'book', 'weak'].includes(asrc)) {
+      S.settings.auto.src = asrc;
+      if (params.get('ch')) S.settings.auto.ch = Number(params.get('ch'));
+    }
+    html = viewAutoSetup(); nav = 'auto';
+  }
   else if (page === 'search') { html = viewSearch(); nav = 'search'; }
   else { html = viewHome(); }
 
@@ -735,6 +994,12 @@ function render() {
 
   // 활성 내비게이션 표시
   $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === nav));
+
+  // 자동 학습 재생 시작(진입 시 1회)
+  if (page === 'auto' && seg[1] === 'run' && autoPlayer) {
+    updateAutoUI();
+    if (!autoPlayer.started) { autoPlayer.started = true; autoRun(); }
+  }
 
   // 학습 뷰 focus 처리
   if (page === 'study' && params.get('focus')) {
@@ -889,12 +1154,38 @@ document.addEventListener('click', e => {
       break;
     }
     case 'q-retry-same': startQuiz(); break;
+
+    case 'auto-src': S.settings.auto.src = t.dataset.src; save(); render(); break;
+    case 'auto-set': {
+      let v = t.dataset.val;
+      v = v === 'true' ? true : v === 'false' ? false : Number(v);
+      S.settings.auto[t.dataset.key] = v; save(); render();
+      break;
+    }
+    case 'auto-start': startAuto(); break;
+    case 'auto-quick': S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
+    case 'auto-toggle': autoToggle(); break;
+    case 'auto-prev': autoJump(-1); break;
+    case 'auto-next': autoJump(1); break;
+    case 'auto-exit': location.hash = '#/auto'; break;
+    case 'auto-live': autoLive(t.dataset.key); break;
   }
 });
 
 document.addEventListener('change', e => {
   const t = e.target.closest('[data-action="q-ch"]');
   if (t) { quizSetup.ch = Number(t.value); }
+  const a = e.target.closest('[data-action="auto-ch"]');
+  if (a) { S.settings.auto.ch = Number(a.value); save(); }
+});
+
+document.addEventListener('keydown', e => {
+  const { seg } = parseHash();
+  if (!(seg[0] === 'auto' && seg[1] === 'run') || !autoPlayer) return;
+  if (e.target.matches('input, select, textarea')) return;
+  if (e.code === 'Space') { e.preventDefault(); autoToggle(); }
+  else if (e.code === 'ArrowRight') { e.preventDefault(); autoJump(1); }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); autoJump(-1); }
 });
 
 document.addEventListener('keydown', e => {
