@@ -7,6 +7,7 @@
 const DATA = window.NIHONGO_DATA;
 const CHAPTERS = DATA.chapters;
 const SENTENCES = DATA.sentences;
+const GRAMMAR = window.NIHONGO_GRAMMAR || [];
 const TOTAL = SENTENCES.length;
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -252,12 +253,19 @@ function viewHome() {
         <b>북마크 복습</b><span>따로 모아 둔 ${bookN}개 문장 다시 보기</span>
         ${bookN ? `<span class="count">${bookN}</span>` : ''}
       </a>
+      <a class="option-card" href="#/chapters?tab=grammar">
+        <b>문법 색인 — <span class="jp">文法</span></b><span>50개 핵심 문형 해설을 한눈에</span>
+      </a>
+      <a class="option-card" href="#/study/${resume.id}">
+        <b>오늘의 20문장</b><span>${pad2(resume.id)}과 「${esc(resume.title)}」 이어가기</span>
+      </a>
     </div>
   </div>`;
 }
 
-/* ---------- 뷰: 목차 ---------- */
+/* ---------- 뷰: 목차 / 문법 색인 ---------- */
 let chapterFilter = 'ALL';
+let chaptersTab = 'list';
 function viewChapters() {
   const filters = ['ALL', 'N5', 'N4', 'N3'];
   const list = CHAPTERS.filter(ch => chapterFilter === 'ALL' || ch.level === chapterFilter);
@@ -266,8 +274,28 @@ function viewChapters() {
     <h1 class="page-title">목차 — 五十課</h1>
     <p class="page-sub">핵심 문형 50과, 과마다 20문장. 순서대로 읽어도 좋고 필요한 문형만 골라도 좋습니다.</p>
     <div class="filter-row">
+      <div class="seg" role="group" aria-label="보기 전환" style="margin-right:auto">
+        <button class="${chaptersTab === 'list' ? 'active' : ''}" data-action="ch-tab" data-tab="list">과 목록</button>
+        <button class="${chaptersTab === 'grammar' ? 'active' : ''}" data-action="ch-tab" data-tab="grammar">문법 색인</button>
+      </div>
       ${filters.map(f => `<button class="filter-btn ${chapterFilter === f ? 'active' : ''}" data-action="filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
     </div>
+    ${chaptersTab === 'grammar' ? `
+    <div class="chapter-list">
+      ${list.map(ch => {
+        const g = GRAMMAR.find(x => x.id === ch.id);
+        if (!g) return '';
+        return `
+        <a class="chapter-item gi-item" href="#/study/${ch.id}">
+          <span class="chapter-num">${pad2(ch.id)}</span>
+          <span class="chapter-body">
+            <h3 class="jp gi-formula">${esc(g.formula)}</h3>
+            <span class="gi-gist">${esc(g.gist)}</span>
+          </span>
+          <span class="chapter-side">${levelChip(ch.level)}</span>
+        </a>`;
+      }).join('')}
+    </div>` : `
     <div class="chapter-list">
       ${list.map(ch => {
         const p = chapterProgress(ch);
@@ -285,8 +313,54 @@ function viewChapters() {
           </span>
         </a>`;
       }).join('')}
-    </div>
+    </div>`}
   </div>`;
+}
+
+/* ---------- 문법 해설 (교재 본문) ---------- */
+function lessonHtml(ch) {
+  const g = GRAMMAR.find(x => x.id === ch.id);
+  if (!g) return '';
+  return `
+  <section class="card lesson">
+    <header class="lesson-head">
+      <span class="lesson-label jp">文法</span>
+      <div class="lesson-title">
+        <h2 class="lesson-formula jp">${esc(g.formula)}</h2>
+        <p class="lesson-gist">${esc(g.gist)}</p>
+      </div>
+    </header>
+    <p class="lesson-intro">${esc(g.intro)}</p>
+    <div class="lesson-grid">
+      <div class="lesson-sec">
+        <h3><i class="jp">接続</i>접속 · 활용</h3>
+        <table class="lesson-table">
+          ${g.forms.map(f => `
+          <tr>
+            <th>${esc(f[0])}</th>
+            <td><span class="jp">${esc(f[1])}</span>${f[2] ? `<small>${esc(f[2])}</small>` : ''}</td>
+          </tr>`).join('')}
+        </table>
+      </div>
+      <div class="lesson-sec">
+        <h3><i class="jp">要点</i>학습 포인트</h3>
+        <ul class="lesson-points">
+          ${g.point.map(p => `<li>${esc(p)}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    ${g.vocab && g.vocab.length ? `
+    <div class="lesson-sec lesson-vocab-sec">
+      <h3><i class="jp">語彙</i>주요 어휘</h3>
+      <div class="vocab-grid">
+        ${g.vocab.map(v => `
+        <div class="vocab-item">
+          <ruby class="jp">${esc(v[0])}<rt>${esc(v[1])}</rt></ruby>
+          <span>${esc(v[2])}</span>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+  </section>`;
 }
 
 /* ---------- 뷰: 학습 ---------- */
@@ -340,6 +414,10 @@ function viewStudy(id) {
         <span class="meta-num"><b id="ch-done">${p.done}</b>/${p.total}</span>
       </div>
     </section>
+
+    ${lessonHtml(ch)}
+
+    <div class="section-head"><h2>본문 — 例文 ${p.total}</h2></div>
 
     <div class="study-tools">
       <div class="seg" role="group" aria-label="표시 모드">
@@ -626,7 +704,10 @@ function render() {
   let nav = 'home';
 
   if (page === 'home') { html = viewHome(); nav = 'home'; }
-  else if (page === 'chapters') { html = viewChapters(); nav = 'chapters'; }
+  else if (page === 'chapters') {
+    if (params.get('tab')) chaptersTab = params.get('tab') === 'grammar' ? 'grammar' : 'list';
+    html = viewChapters(); nav = 'chapters';
+  }
   else if (page === 'study') {
     const id = Number(seg[1]) || 1;
     html = viewStudy(Math.min(Math.max(id, 1), CHAPTERS.length));
@@ -783,6 +864,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'filter': chapterFilter = t.dataset.filter; render(); break;
+    case 'ch-tab': chaptersTab = t.dataset.tab; render(); break;
 
     case 'q-src': quizSetup.src = t.dataset.src; render(); break;
     case 'q-dir': quizSetup.dir = t.dataset.dir; render(); break;
