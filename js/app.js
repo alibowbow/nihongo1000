@@ -298,6 +298,9 @@ function viewHome() {
       <a class="option-card" href="#/chapters?tab=grammar">
         <b>문법 색인 — <span class="jp">文法</span></b><span>50개 핵심 문형 해설을 한눈에</span>
       </a>
+      <a class="option-card" href="#/all">
+        <b>천문장 — <span class="jp">全文</span></b><span>1000문장을 한 화면에서 통독</span>
+      </a>
       <a class="option-card" href="#/study/${resume.id}">
         <b>오늘의 20문장</b><span>${pad2(resume.id)}과 「${esc(resume.title)}」 이어가기</span>
       </a>
@@ -328,7 +331,7 @@ function viewChapters() {
         const g = GRAMMAR.find(x => x.id === ch.id);
         if (!g) return '';
         return `
-        <a class="chapter-item gi-item" href="#/study/${ch.id}">
+        <a class="chapter-item gi-item" href="#/grammar/${ch.id}">
           <span class="chapter-num">${pad2(ch.id)}</span>
           <span class="chapter-body">
             <h3 class="jp gi-formula">${esc(g.formula)}</h3>
@@ -356,6 +359,35 @@ function viewChapters() {
         </a>`;
       }).join('')}
     </div>`}
+  </div>`;
+}
+
+/* ---------- 뷰: 문법 상세 (문법만 보기) ---------- */
+function viewGrammar(id) {
+  const ch = chapterOf(id);
+  const g = GRAMMAR.find(x => x.id === id);
+  if (!ch || !g) { location.hash = '#/chapters?tab=grammar'; return ''; }
+  const prev = id > 1 ? GRAMMAR.find(x => x.id === id - 1) : null;
+  const next = id < CHAPTERS.length ? GRAMMAR.find(x => x.id === id + 1) : null;
+  return `
+  <div class="view">
+    <section class="card study-head">
+      <div class="crumb"><a href="#/chapters?tab=grammar">문법 색인</a> <span>›</span> <span>제${pad2(id)}과</span></div>
+      <h1 class="jp">${pad2(id)}. ${esc(ch.title)}</h1>
+      <div class="meta-row">${levelChip(ch.level)}<span class="meta-num">본문 ${pad4(ch.start)}–${pad4(ch.end)}</span></div>
+    </section>
+
+    ${lessonHtml(ch)}
+
+    <div class="grammar-cta">
+      <a class="btn btn-primary" href="#/study/${id}">이 과 본문 20문장 학습 ${ICON.arrowR}</a>
+      <button class="btn btn-ghost" data-action="auto-quick" data-ch="${id}">${ICON.playFill}<span style="margin-left:5px">자동 재생</span></button>
+    </div>
+
+    <div class="study-footer">
+      ${prev ? `<a class="btn btn-ghost jp" href="#/grammar/${id - 1}">← ${esc(prev.formula)}</a>` : '<span></span>'}
+      ${next ? `<a class="btn btn-ghost jp" href="#/grammar/${id + 1}">${esc(next.formula)} →</a>` : '<span></span>'}
+    </div>
   </div>`;
 }
 
@@ -483,6 +515,68 @@ function viewStudy(id) {
       ${prev ? `<a class="btn btn-ghost" href="#/study/${prev.id}">← ${pad2(prev.id)}. ${esc(prev.title)}</a>` : '<span></span>'}
       ${next ? `<a class="btn btn-primary" href="#/study/${next.id}">${pad2(next.id)}. ${esc(next.title)} →</a>` : `<a class="btn btn-primary" href="#/quiz">암기 모드로 →</a>`}
     </div>
+  </div>`;
+}
+
+/* ---------- 뷰: 천문장 (전체 1000문장 통독) ---------- */
+let allFilter = 'ALL';
+
+function allRow(s) {
+  const mode = S.settings.hideMode;
+  const learned = !!S.learned[s.n];
+  return `
+  <div class="all-row" data-n="${s.n}">
+    <a class="ar-num jp ${learned ? 'done' : ''}" href="#/study/${s.ch}?focus=${s.n}" title="${learned ? '학습 완료 · ' : ''}본문에서 보기">${pad4(s.n)}</a>
+    <div class="ar-body">
+      <p class="ar-jp jp">${maskWrap(esc(s.jp), mode === 'hideJp')}</p>
+      <p class="ar-ko">${maskWrap(esc(s.ko), mode === 'hideKo')}</p>
+    </div>
+    <button class="s-btn icon-only" data-action="speak" data-n="${s.n}" title="듣기" aria-label="듣기">${ICON.play}</button>
+  </div>`;
+}
+
+function viewAll() {
+  const mode = S.settings.hideMode;
+  const chs = CHAPTERS.filter(c => allFilter === 'ALL' || c.level === allFilter);
+  const totalShown = chs.reduce((a, c) => a + (c.end - c.start + 1), 0);
+  return `
+  <div class="view">
+    <h1 class="page-title">천문장 — 全文 1000</h1>
+    <p class="page-sub">1000문장을 한 화면에서 통독하세요. 가리기로 암송 연습을, 번호를 누르면 해당 과 본문으로 이동합니다.</p>
+
+    <div class="filter-row">
+      ${['ALL', 'N5', 'N4', 'N3'].map(f => `<button class="filter-btn ${allFilter === f ? 'active' : ''}" data-action="all-filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
+      <span class="filter-meta">${chs.length}과 · ${totalShown}문장</span>
+    </div>
+
+    <div class="study-tools">
+      <div class="seg" role="group" aria-label="표시 모드">
+        <button class="${mode === 'all' ? 'active' : ''}" data-action="hide-mode" data-mode="all">모두 보기</button>
+        <button class="${mode === 'hideKo' ? 'active' : ''}" data-action="hide-mode" data-mode="hideKo">한국어 가리기</button>
+        <button class="${mode === 'hideJp' ? 'active' : ''}" data-action="hide-mode" data-mode="hideJp">일본어 가리기</button>
+      </div>
+      <div class="right">
+        <div class="select-wrap select-sm">
+          <select data-action="all-jump" aria-label="과로 이동">
+            <option value="">과로 이동…</option>
+            ${chs.map(c => `<option value="${c.id}">${pad2(c.id)}. ${esc(c.title)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    ${chs.map(c => `
+    <section class="all-sec" id="all-ch-${c.id}">
+      <div class="all-sec-head">
+        <span class="chapter-num">${pad2(c.id)}</span>
+        <h2 class="jp">${esc(c.title)}</h2>
+        ${levelChip(c.level)}
+        <a class="s-btn" href="#/study/${c.id}">학습 →</a>
+      </div>
+      <div class="card all-list">
+        ${SENTENCES.slice(c.start - 1, c.end).map(allRow).join('')}
+      </div>
+    </section>`).join('')}
   </div>`;
 }
 
@@ -700,7 +794,7 @@ function viewAutoSetup() {
       <div><label>일본어 반복</label>${seg('repeat', [[1, '1회'], [2, '2회'], [3, '3회']])}</div>
       <div><label>재생 속도</label>${seg('rate', [[0.7, '느리게'], [0.9, '보통'], [1.1, '빠르게']])}</div>
       <div><label>문장 간격</label>${seg('gap', [[400, '짧게'], [900, '보통'], [1600, '길게']])}</div>
-      <div><label>반복 재생</label>${seg('loop', [[false, '끄기'], [true, '켜기']])}</div>
+      <div><label>Loop</label>${seg('loop', [[false, '끄기'], [true, '켜기']])}</div>
     </div>
 
     <div class="quiz-start-row">
@@ -743,7 +837,7 @@ function viewAutoRun() {
     <div class="auto-live">
       <button id="auto-rate-btn" data-action="auto-live" data-key="rate">${A.rate}×</button>
       <button id="auto-ko-btn" class="${A.readKo ? 'on' : ''}" data-action="auto-live" data-key="readKo">한국어 음성</button>
-      <button id="auto-loop-btn" class="${A.loop ? 'on' : ''}" data-action="auto-live" data-key="loop">반복 재생</button>
+      <button id="auto-loop-btn" class="${A.loop ? 'on' : ''}" data-action="auto-live" data-key="loop">Loop</button>
     </div>
     <p class="quiz-kbd"><kbd>Space</kbd> 재생/정지 · <kbd>←</kbd> 이전 · <kbd>→</kbd> 다음</p>
   </div>`;
@@ -960,6 +1054,12 @@ function render() {
     html = viewStudy(Math.min(Math.max(id, 1), CHAPTERS.length));
     nav = 'chapters';
   }
+  else if (page === 'grammar') {
+    const gid = Math.min(Math.max(Number(seg[1]) || 1, 1), CHAPTERS.length);
+    html = viewGrammar(gid);
+    nav = 'chapters';
+  }
+  else if (page === 'all') { html = viewAll(); nav = 'all'; }
   else if (page === 'quiz' && seg[1] === 'run') { html = viewQuizRun(); nav = 'quiz'; }
   else if (page === 'quiz') {
     // 홈/학습에서 진입 시 소스 사전 선택
@@ -1112,13 +1212,19 @@ document.addEventListener('click', e => {
     case 'book': toggleBook(Number(t.dataset.n), t); break;
     case 'reveal': t.classList.add('revealed'); break;
     case 'hide-mode': {
-      S.settings.hideMode = t.dataset.mode; save();
-      // 전체 재렌더 없이 마스크만 갱신
-      $$('.study-tools .seg button').forEach(b => b.classList.toggle('active', b === t));
+      const m = t.dataset.mode;
+      S.settings.hideMode = m; save();
+      // 전체 재렌더 없이 마스크만 갱신 (학습 뷰 + 천문장 뷰 공용)
+      $$('[data-action="hide-mode"]').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
       $$('.s-card').forEach(card => {
-        const n = Number(card.dataset.n); const s = sentence(n);
-        card.querySelector('.s-jp').innerHTML = maskWrap(esc(s.jp), t.dataset.mode === 'hideJp');
-        card.querySelector('.s-ko').innerHTML = maskWrap(esc(s.ko), t.dataset.mode === 'hideKo');
+        const s = sentence(Number(card.dataset.n));
+        card.querySelector('.s-jp').innerHTML = maskWrap(esc(s.jp), m === 'hideJp');
+        card.querySelector('.s-ko').innerHTML = maskWrap(esc(s.ko), m === 'hideKo');
+      });
+      $$('.all-row').forEach(row => {
+        const s = sentence(Number(row.dataset.n));
+        row.querySelector('.ar-jp').innerHTML = maskWrap(esc(s.jp), m === 'hideJp');
+        row.querySelector('.ar-ko').innerHTML = maskWrap(esc(s.ko), m === 'hideKo');
       });
       break;
     }
@@ -1130,6 +1236,8 @@ document.addEventListener('click', e => {
     }
     case 'filter': chapterFilter = t.dataset.filter; render(); break;
     case 'ch-tab': chaptersTab = t.dataset.tab; render(); break;
+    case 'all-filter': allFilter = t.dataset.filter; render(); break;
+    case 'to-top': window.scrollTo({ top: 0, behavior: 'smooth' }); break;
 
     case 'q-src': quizSetup.src = t.dataset.src; render(); break;
     case 'q-dir': quizSetup.dir = t.dataset.dir; render(); break;
@@ -1177,6 +1285,11 @@ document.addEventListener('change', e => {
   if (t) { quizSetup.ch = Number(t.value); }
   const a = e.target.closest('[data-action="auto-ch"]');
   if (a) { S.settings.auto.ch = Number(a.value); save(); }
+  const j = e.target.closest('[data-action="all-jump"]');
+  if (j && j.value) {
+    const el = $('#all-ch-' + j.value);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 });
 
 document.addEventListener('keydown', e => {
@@ -1210,6 +1323,14 @@ document.addEventListener('keydown', e => {
 });
 
 window.addEventListener('hashchange', render);
+
+/* ---------- 맨 위로 버튼 ---------- */
+const toTopBtn = $('#to-top');
+let toTopShown = false;
+window.addEventListener('scroll', () => {
+  const show = window.scrollY > 700;
+  if (show !== toTopShown) { toTopShown = show; toTopBtn.classList.toggle('show', show); }
+}, { passive: true });
 
 /* ---------- 시작 ---------- */
 applyTheme();

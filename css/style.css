@@ -450,7 +450,11 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   margin-top: 28px;
 }
-.study-footer .btn { flex: 1; max-width: 220px; }
+.study-footer .btn {
+  flex: 1; max-width: 260px; min-width: 0;
+  display: block; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .chapter-done-cta { text-align: center; margin: 30px 0 8px; }
 
 /* ---------- 암기(퀴즈) 설정 ---------- */
@@ -766,10 +770,56 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .auto-live button:hover { border-color: var(--ink-soft); color: var(--ink); }
 .auto-live button.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
 
-/* ---------- 문법 색인 ---------- */
+/* ---------- 문법 색인 / 문법 상세 ---------- */
 .gi-item .gi-formula { font-size: 17px; font-weight: 700; margin: 0 0 2px; }
 .gi-item .gi-gist { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 .filter-row .seg { padding: 3px; }
+.grammar-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 4px 0 28px; }
+
+/* ---------- 천문장 (전체 1000문장) ---------- */
+.filter-meta { margin-left: auto; align-self: center; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.select-sm select { width: auto; padding: 8px 34px 8px 12px; font-size: 13px; border-radius: 10px; }
+.all-sec { margin-top: 28px; scroll-margin-top: 138px; }
+.all-sec-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 10px; min-width: 0; }
+.all-sec-head h2 { margin: 0; font-size: 16.5px; font-weight: 700; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.all-sec-head .chapter-num { font-size: 17px; flex: none; }
+.all-sec-head .chip { flex: none; }
+.all-sec-head .s-btn { margin-left: auto; flex: none; }
+.all-list { padding: 2px 0; border-radius: var(--radius); }
+.all-row {
+  display: grid; grid-template-columns: 54px 1fr auto; gap: 2px 14px; align-items: start;
+  padding: 11px 12px 11px 18px;
+  border-top: 1px solid var(--line);
+}
+.all-row:first-child { border-top: 0; }
+.ar-num {
+  font-family: var(--font-jp); font-size: 12.5px; font-weight: 600; color: var(--muted);
+  letter-spacing: .05em; line-height: 2; font-variant-numeric: tabular-nums;
+  transition: color .15s;
+}
+.ar-num:hover { color: var(--accent); }
+.ar-num.done { color: var(--n5); }
+.ar-body { min-width: 0; }
+.ar-jp { margin: 0; font-size: calc(16px * var(--scale)); font-weight: 600; line-height: 1.75; overflow-wrap: anywhere; }
+.ar-ko { margin: 0; font-size: calc(12.5px * var(--scale)); color: var(--muted); line-height: 1.65; overflow-wrap: anywhere; }
+.all-row .s-btn.icon-only { padding: 6px 8px; align-self: center; }
+@media (max-width: 560px) {
+  .all-row { grid-template-columns: 42px 1fr auto; gap: 2px 10px; padding: 10px 8px 10px 14px; }
+}
+
+/* ---------- 맨 위로 버튼 ---------- */
+.to-top {
+  position: fixed; right: 18px; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 60;
+  width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface); color: var(--ink-soft);
+  border: 1px solid var(--line-strong); box-shadow: var(--shadow-lg);
+  opacity: 0; transform: translateY(12px); pointer-events: none;
+  transition: opacity .25s, transform .25s, color .15s, border-color .15s;
+}
+.to-top.show { opacity: 1; transform: none; pointer-events: auto; }
+.to-top:hover { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 760px) { .to-top { right: 14px; bottom: calc(86px + env(safe-area-inset-bottom)); } }
 
 /* ---------- 모션 줄이기 ---------- */
 @media (prefers-reduced-motion: reduce) {
