@@ -92,6 +92,15 @@ function chapterProgress(ch) {
   return { done, total: ch.end - ch.start + 1 };
 }
 
+// 이어서 학습할 과: 마지막 방문 과가 미완이면 그곳, 아니면 첫 미완성 과
+function resumeChapter() {
+  let r = S.lastChapter ? chapterOf(S.lastChapter) : null;
+  if (!r || chapterProgress(r).done === chapterProgress(r).total) {
+    r = CHAPTERS.find(ch => chapterProgress(ch).done < chapterProgress(ch).total) || CHAPTERS[0];
+  }
+  return r;
+}
+
 /* ---------- 테마 / 폰트 크기 ---------- */
 const mqDark = window.matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
@@ -210,12 +219,10 @@ function viewHome() {
   const total = learnedCount();
   const pct = total / TOTAL;
 
-  // 이어서 학습할 챕터: 마지막 방문 챕터가 미완이면 그곳, 아니면 첫 미완성 챕터
-  let resume = S.lastChapter ? chapterOf(S.lastChapter) : null;
-  if (!resume || chapterProgress(resume).done === chapterProgress(resume).total) {
-    resume = CHAPTERS.find(ch => chapterProgress(ch).done < chapterProgress(ch).total) || CHAPTERS[0];
-  }
+  const resume = resumeChapter();
   const rp = chapterProgress(resume);
+  const fresh = total === 0;
+  const allDone = total === TOTAL;
 
   // 레벨별 진행
   const levels = ['N5', 'N4', 'N3'].map(lv => {
@@ -243,21 +250,26 @@ function viewHome() {
           <p class="lead">핵심 문형 50과를 따라 하루 20문장씩, 소리 내어 읽고 가리고 바꿔 말하는 천일문 학습법으로 일본어의 뼈대를 세워 보세요.</p>
           <div class="hero-cta">
             <a class="btn btn-primary btn-lg" href="#/study/${resume.id}">
-              ${total === 0 ? '학습 시작하기' : '이어서 학습하기'} ${ICON.arrowR}
+              ${fresh ? '학습 시작하기' : allDone ? '복습 시작하기' : '이어서 학습하기'} ${ICON.arrowR}
             </a>
+            ${(!fresh && resume.id !== 1) ? `<a class="btn btn-ghost btn-lg" href="#/study/1">처음부터</a>` : ''}
             <a class="btn btn-ghost btn-lg" href="#/auto">${ICON.playFill}<span style="margin-left:6px">자동 학습</span></a>
           </div>
-          <p class="resume-meta" style="margin:12px 0 0"><b>${pad2(resume.id)}. ${esc(resume.title)}</b> · ${rp.done}/${rp.total} 문장</p>
+          <p class="resume-meta">
+            ${fresh
+              ? `<b>01. ${esc(CHAPTERS[0].title)}</b>부터 시작해요 · 하루 20문장이면 50일 완성`
+              : `이어서 학습: <b>${pad2(resume.id)}. ${esc(resume.title)}</b> · ${rp.done}/${rp.total}문장 · 전체 ${total}/${TOTAL}`}
+          </p>
         </div>
         ${ringSvg(pct)}
       </div>
     </section>
 
     <div class="stat-grid">
-      <div class="stat"><b>${total}<small>/ ${TOTAL}문장</small></b><span>학습 완료</span></div>
+      <a class="stat is-link" href="#/all"><b>${total}<small>/ ${TOTAL}문장</small></b><span>학습 완료 →</span></a>
       <div class="stat"><b>${todayCount()}<small>문장</small></b><span>오늘 학습</span></div>
-      <a class="stat is-link" href="#/quiz?src=weak"><b>${weakN}<small>문장</small></b><span>복습 대기 →</span></a>
-      <div class="stat"><b>${S.streak.count}<small>일</small></b><span>연속 학습</span></div>
+      <a class="stat is-link ${weakN ? '' : 'stat-muted'}" href="#/quiz?src=weak"><b>${weakN}<small>문장</small></b><span>복습 대기 ${weakN ? '→' : ''}</span></a>
+      <div class="stat"><b>${S.streak.count}<small>일</small></b><span>연속 학습 🔥</span></div>
     </div>
 
     <div class="section-head"><h2>오늘의 문장</h2><a href="#/study/${tod.ch}?focus=${tod.n}">본문에서 보기</a></div>
@@ -314,6 +326,7 @@ let chaptersTab = 'list';
 function viewChapters() {
   const filters = ['ALL', 'N5', 'N4', 'N3'];
   const list = CHAPTERS.filter(ch => chapterFilter === 'ALL' || ch.level === chapterFilter);
+  const resumeId = resumeChapter().id;
   return `
   <div class="view">
     <h1 class="page-title">목차 — 五十課</h1>
@@ -345,16 +358,18 @@ function viewChapters() {
       ${list.map(ch => {
         const p = chapterProgress(ch);
         const pct = Math.round(p.done / p.total * 100);
+        const done = p.done === p.total;
+        const isResume = !done && ch.id === resumeId && p.done > 0;
         return `
-        <a class="chapter-item ${p.done === p.total ? 'done' : ''}" href="#/study/${ch.id}">
+        <a class="chapter-item ${done ? 'done' : ''} ${isResume ? 'resume' : ''}" href="#/study/${ch.id}">
           <span class="chapter-num">${pad2(ch.id)}</span>
           <span class="chapter-body">
-            <h3>${esc(ch.title)}</h3>
+            <h3>${esc(ch.title)}${isResume ? '<span class="resume-tag">이어서</span>' : ''}</h3>
             <span class="sub">${levelChip(ch.level)} <span>${pad4(ch.start)}–${pad4(ch.end)}</span></span>
             <span class="bar thin"><i style="width:${pct}%"></i></span>
           </span>
           <span class="chapter-side">
-            <span class="pct">${p.done === p.total ? '완료 ✓' : pct + '%'}</span>
+            <span class="pct">${done ? '완료 ✓' : pct + '%'}</span>
           </span>
         </a>`;
       }).join('')}
@@ -969,6 +984,39 @@ function hl(text, q) {
   return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
 }
 
+const SEARCH_CHIPS = ['学校', '友だち', 'たら', 'てください', '0617'];
+
+function searchListInner(q, res) {
+  if (!q.trim()) {
+    return `<div class="empty">
+      <span class="jp">探</span>찾고 싶은 단어나 문형을 입력해 보세요
+      <div class="search-chips">
+        ${SEARCH_CHIPS.map(x => `<button class="search-chip ${/[぀-ヿ一-龯]/.test(x) ? 'jp' : ''}" data-action="search-fill" data-q="${esc(x)}">${esc(x)}</button>`).join('')}
+      </div>
+    </div>`;
+  }
+  if (res.length === 0) return `<div class="empty"><span class="jp">無</span>일치하는 문장이 없어요</div>`;
+  return res.map(s => `
+    <a class="result-item" href="#/study/${s.ch}?focus=${s.n}">
+      <div class="r-top"><span class="s-num jp">${pad4(s.n)}</span>${levelChip(chapterOf(s.ch).level)}<span>${pad2(s.ch)}. ${esc(chapterOf(s.ch).title)}</span></div>
+      <div class="jp">${hl(s.jp, q)}</div>
+      <div class="ko">${hl(s.ko, q)}</div>
+    </a>`).join('');
+}
+
+function searchMetaHtml(q, res) {
+  return q.trim() ? `<p class="search-meta">“${esc(q)}” 검색 결과 ${res.length}건${res.length >= 50 ? ' (상위 50건만 표시)' : ''}</p>` : '';
+}
+
+function renderSearchResults() {
+  const list = $('.result-list'); if (!list) return;
+  const oldMeta = $('.search-meta'); if (oldMeta) oldMeta.remove();
+  const res = searchResults(searchQuery);
+  list.insertAdjacentHTML('beforebegin', searchMetaHtml(searchQuery, res));
+  list.innerHTML = searchListInner(searchQuery, res);
+  const clr = $('.search-clear'); if (clr) clr.classList.toggle('show', !!searchQuery.trim());
+}
+
 function viewSearch() {
   const q = searchQuery;
   const res = searchResults(q);
@@ -978,21 +1026,11 @@ function viewSearch() {
     <p class="page-sub">일본어 · 한국어 뜻 · 문형 · 문장 번호로 1000문장을 바로 찾습니다.</p>
     <div class="search-box">
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="search" id="search-input" placeholder="예: 学校 / 학교 / たら / 0432" value="${esc(q)}" autocomplete="off">
+      <input type="search" id="search-input" placeholder="예: 学校 / 학교 / たら / 0432" value="${esc(q)}" autocomplete="off" enterkeyhint="search">
+      <button class="search-clear ${q.trim() ? 'show' : ''}" data-action="search-clear" aria-label="지우기" title="지우기">${ICON.x}</button>
     </div>
-    ${q.trim() ? `<p class="search-meta">“${esc(q)}” 검색 결과 ${res.length}건${res.length >= 50 ? ' (상위 50건만 표시)' : ''}</p>` : ''}
-    <div class="result-list">
-      ${!q.trim()
-        ? `<div class="empty"><span class="jp">探</span>찾고 싶은 단어나 문형을 입력해 보세요</div>`
-        : res.length === 0
-          ? `<div class="empty"><span class="jp">無</span>일치하는 문장이 없어요</div>`
-          : res.map(s => `
-            <a class="result-item" href="#/study/${s.ch}?focus=${s.n}">
-              <div class="r-top"><span class="s-num jp">${pad4(s.n)}</span>${levelChip(chapterOf(s.ch).level)}<span>${pad2(s.ch)}. ${esc(chapterOf(s.ch).title)}</span></div>
-              <div class="jp">${hl(s.jp, q)}</div>
-              <div class="ko">${hl(s.ko, q)}</div>
-            </a>`).join('')}
-    </div>
+    ${searchMetaHtml(q, res)}
+    <div class="result-list">${searchListInner(q, res)}</div>
   </div>`;
 }
 
@@ -1114,29 +1152,11 @@ function render() {
     window.scrollTo(0, 0);
   }
 
-  // 검색 입력 바인딩
+  // 검색 입력 바인딩 (입력 포커스 유지한 채 결과만 갱신)
   const si = $('#search-input');
   if (si) {
-    si.addEventListener('input', () => {
-      searchQuery = si.value;
-      // 입력 유지한 채 결과만 갱신
-      const list = $('.result-list'); const meta = $('.search-meta');
-      if (meta) meta.remove();
-      const res = searchResults(searchQuery);
-      const metaHtml = searchQuery.trim() ? `<p class="search-meta">“${esc(searchQuery)}” 검색 결과 ${res.length}건${res.length >= 50 ? ' (상위 50건만 표시)' : ''}</p>` : '';
-      list.insertAdjacentHTML('beforebegin', metaHtml);
-      list.innerHTML = !searchQuery.trim()
-        ? `<div class="empty"><span class="jp">探</span>찾고 싶은 단어나 문형을 입력해 보세요</div>`
-        : res.length === 0
-          ? `<div class="empty"><span class="jp">無</span>일치하는 문장이 없어요</div>`
-          : res.map(s => `
-            <a class="result-item" href="#/study/${s.ch}?focus=${s.n}">
-              <div class="r-top"><span class="s-num jp">${pad4(s.n)}</span>${levelChip(chapterOf(s.ch).level)}<span>${pad2(s.ch)}. ${esc(chapterOf(s.ch).title)}</span></div>
-              <div class="jp">${hl(s.jp, searchQuery)}</div>
-              <div class="ko">${hl(s.ko, searchQuery)}</div>
-            </a>`).join('');
-    });
-    if (!('ontouchstart' in window)) si.focus();
+    si.addEventListener('input', () => { searchQuery = si.value; renderSearchResults(); });
+    if (!('ontouchstart' in window)) { si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
   }
 }
 
@@ -1238,6 +1258,18 @@ document.addEventListener('click', e => {
     case 'ch-tab': chaptersTab = t.dataset.tab; render(); break;
     case 'all-filter': allFilter = t.dataset.filter; render(); break;
     case 'to-top': window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+    case 'search-clear': {
+      searchQuery = '';
+      const si = $('#search-input'); if (si) { si.value = ''; si.focus(); }
+      renderSearchResults();
+      break;
+    }
+    case 'search-fill': {
+      searchQuery = t.dataset.q;
+      const si = $('#search-input'); if (si) si.value = searchQuery;
+      renderSearchResults();
+      break;
+    }
 
     case 'q-src': quizSetup.src = t.dataset.src; render(); break;
     case 'q-dir': quizSetup.dir = t.dataset.dir; render(); break;
