@@ -619,6 +619,105 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(.95); } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(8px) scale(.97); } }
 
+/* ---------- 문법 해설 (교재 본문) ---------- */
+.lesson {
+  position: relative;
+  padding: 26px 28px 24px;
+  margin-bottom: 22px;
+  border-top: 3px solid var(--accent);
+  overflow: hidden;
+}
+.lesson::before {
+  content: "解説";
+  position: absolute; top: 14px; right: 18px;
+  writing-mode: vertical-rl;
+  font-family: var(--font-jp); font-size: 30px; font-weight: 600; letter-spacing: .2em;
+  color: color-mix(in srgb, var(--ink) 6%, transparent);
+  pointer-events: none; user-select: none;
+}
+.lesson-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+.lesson-label {
+  display: grid; place-items: center; flex: none;
+  width: 40px; height: 40px; margin-top: 2px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 15px; font-weight: 600; letter-spacing: .05em;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent-ink) 30%, transparent);
+}
+.lesson-title { min-width: 0; }
+.lesson-formula {
+  margin: 0 0 2px;
+  font-size: clamp(19px, 3.6vw, 24px); font-weight: 700; line-height: 1.4;
+  letter-spacing: .01em;
+}
+.lesson-gist { margin: 0; font-size: 13px; color: var(--accent); font-weight: 600; }
+.lesson-intro {
+  margin: 0 0 18px; font-size: 14.5px; line-height: 1.85; color: var(--ink-soft);
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 10px 10px 0;
+}
+
+.lesson-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 22px; }
+@media (max-width: 700px) { .lesson-grid { grid-template-columns: 1fr; } }
+
+.lesson-sec h3 {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 10px; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--ink);
+}
+.lesson-sec h3 i {
+  font-style: normal; font-weight: 600; font-size: 12px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 5px; padding: 1px 7px; letter-spacing: .12em;
+}
+
+.lesson-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.lesson-table tr { border-top: 1px solid var(--line); }
+.lesson-table tr:first-child { border-top: 0; }
+.lesson-table th {
+  width: 34%; text-align: left; vertical-align: top;
+  padding: 9px 12px 9px 2px;
+  font-size: 12px; font-weight: 600; color: var(--muted); line-height: 1.5;
+  word-break: keep-all;
+}
+.lesson-table td { padding: 9px 0; line-height: 1.6; }
+.lesson-table td .jp { font-weight: 600; font-size: 14.5px; }
+.lesson-table td small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+
+.lesson-points { margin: 0; padding: 0; list-style: none; }
+.lesson-points li {
+  position: relative; padding: 7px 0 7px 20px;
+  font-size: 13.5px; line-height: 1.7; color: var(--ink-soft);
+  border-top: 1px dashed var(--line);
+}
+.lesson-points li:first-child { border-top: 0; }
+.lesson-points li::before {
+  content: "※"; position: absolute; left: 1px; top: 7px;
+  color: var(--accent); font-size: 12px; font-weight: 700;
+}
+
+.lesson-vocab-sec { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.vocab-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+@media (max-width: 700px) { .vocab-grid { grid-template-columns: repeat(2, 1fr); } }
+.vocab-item {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 9px 12px 8px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  min-width: 0;
+}
+.vocab-item ruby { font-size: 15.5px; font-weight: 600; line-height: 1.3; }
+.vocab-item rt { font-size: 9.5px; color: var(--accent); font-weight: 500; letter-spacing: .02em; }
+.vocab-item > span { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 문법 색인 ---------- */
+.gi-item .gi-formula { font-size: 17px; font-weight: 700; margin: 0 0 2px; }
+.gi-item .gi-gist { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.filter-row .seg { padding: 3px; }
+
 /* ---------- 모션 줄이기 ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
