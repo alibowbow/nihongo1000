@@ -883,6 +883,7 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .kana-grid-free { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
 @media (max-width: 560px) { .kana-grid-free { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; } }
 .kana-cell.quiz .kc-char { font-size: 28px; }
+.kana-cell.quiz:not(.revealed) .kc-char i { display: none; }
 .kana-cell.quiz:not(.revealed) .kc-sub { color: var(--muted); opacity: .4; letter-spacing: .12em; }
 .kana-cell.quiz.revealed {
   border-color: color-mix(in srgb, var(--n5) 55%, var(--line));

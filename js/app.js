@@ -968,11 +968,13 @@ function autoLive(key) {
 /* ---------- 가나(五十音) 익히기 ---------- */
 const KANA = window.NIHONGO_KANA || { seion: [], dakuon: [], yoon: [] };
 let kanaMode = 'chart'; // chart | practice
-let kanaPractice = { range: 'seion', items: [], revealed: {} };
+let kanaPractice = { range: 'seion', items: [], revealed: {}, flips: [] };
 
 function reshuffleKana() {
   kanaPractice.items = shuffle(kanaPool(kanaPractice.range));
   kanaPractice.revealed = {};
+  // '함께 보기'일 때 셀마다 히라/카타 중 어느 쪽을 낼지 미리 결정
+  kanaPractice.flips = kanaPractice.items.map(() => Math.random() < 0.5);
 }
 
 const KANA_SECTIONS = [
@@ -1011,13 +1013,16 @@ function kanaScriptSeg() {
 }
 
 function practiceCellHtml(c, i) {
+  // 연습 모드: 답이 새지 않도록 짝 문자는 공개 전까지 숨김(CSS).
+  // '함께 보기'면 셀마다 히라/카타를 무작위로 출제.
   const sc = S.settings.kanaScript;
-  const main = sc === 'kata' ? c.k : c.h;
-  const alt = sc === 'both' ? `<i>${esc(c.k)}</i>` : '';
+  const useKata = sc === 'kata' || (sc === 'both' && kanaPractice.flips[i]);
+  const main = useKata ? c.k : c.h;
+  const counter = useKata ? c.h : c.k;
   const rev = !!kanaPractice.revealed[i];
   return `
-  <button class="kana-cell quiz ${rev ? 'revealed' : ''}" data-action="kana-reveal" data-i="${i}" data-ch="${esc(main)}" title="눌러서 발음 확인">
-    <span class="kc-char jp">${esc(main)}${alt}</span>
+  <button class="kana-cell quiz ${rev ? 'revealed' : ''}" data-action="kana-reveal" data-i="${i}" data-ch="${esc(c.h)}" title="눌러서 발음 확인">
+    <span class="kc-char jp">${esc(main)}<i>${esc(counter)}</i></span>
     <span class="kc-sub">${rev ? `${esc(c.r)} · ${esc(c.ko)}` : '?'}</span>
   </button>`;
 }
