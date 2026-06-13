@@ -939,6 +939,13 @@ html[data-theme="dark"] .wc-5 { --wc-bg: #20302e; --wc-line: #324845; --wc-ink: 
 .words-toggles { display: flex; gap: 6px; flex: none; }
 .words-tools .btn { flex: none; white-space: nowrap; }
 .words-tools .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+/* 모바일: 주제 칩과 토글 버튼을 위/아래로 분리해 칩이 가려지지 않게 */
+@media (max-width: 760px) {
+  .words-tools { flex-wrap: wrap; gap: 8px; }
+  .word-jump { order: 1; flex-basis: 100%; width: 100%; min-width: 0; }
+  .words-toggles { order: 2; width: 100%; }
+  .words-toggles .btn { flex: 1; }
+}
 
 .word-sec { margin-top: 26px; scroll-margin-top: 134px; }
 .ws-jp { font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 2px; }
