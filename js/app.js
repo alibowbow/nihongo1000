@@ -1135,7 +1135,7 @@ function viewWords() {
 
     <div class="study-tools words-tools">
       <div class="word-jump">
-        ${WORDS.map(c => `<button class="word-chip" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
+        ${WORDS.map((c, i) => `<button class="word-chip wc-${i % 6}" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
       </div>
       <div class="words-toggles">
         <button class="btn btn-sm btn-ghost ${wordsShowRead ? 'on' : ''}" data-action="words-read">${wordsShowRead ? '발음 가리기' : '발음 보이기'}</button>

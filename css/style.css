@@ -134,6 +134,9 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .topnav a:hover { background: var(--surface-2); color: var(--ink); }
 .topnav a.active { background: var(--ink); color: var(--bg); }
 html[data-theme="dark"] .topnav a.active { background: var(--ink); color: var(--bg-deep); }
+.topnav a.nav-1000 { font-family: var(--font-jp); font-weight: 700; letter-spacing: .03em; font-variant-numeric: tabular-nums; color: var(--accent); }
+.topnav a.nav-1000:hover { background: var(--accent-wash); color: var(--accent-deep); }
+.topnav a.nav-1000.active, .topnav a.nav-1000.active:hover { background: var(--accent); color: var(--accent-ink); }
 
 .topbar-actions { display: flex; gap: 6px; }
 .icon-btn {
@@ -855,6 +858,7 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 
 /* ---------- 가나(五十音) 익히기 ---------- */
 .tabbar .kana-ico { font-size: 19px; font-weight: 600; height: 22px; line-height: 22px; display: block; }
+.tabbar .tab-1000 { font-family: var(--font-jp); font-weight: 700; font-size: 15px; height: 22px; line-height: 22px; display: block; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
 
 .kana-intro {
   margin: 0 2px 14px; font-size: 13.5px; line-height: 1.75; color: var(--ink-soft);
@@ -910,12 +914,28 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .word-jump::-webkit-scrollbar { height: 5px; }
 .word-jump::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 9px; }
 .word-chip {
-  flex: none; padding: 6px 13px; border-radius: 99px;
-  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
-  background: var(--surface); border: 1px solid var(--line-strong);
+  flex: none; padding: 6px 14px; border-radius: 99px;
+  font-size: 12.5px; font-weight: 600;
+  color: var(--wc-ink, var(--ink-soft));
+  background: var(--wc-bg, var(--surface));
+  border: 1px solid var(--wc-line, var(--line-strong));
   white-space: nowrap; transition: all .15s;
 }
-.word-chip:hover { border-color: var(--accent); color: var(--accent); }
+.word-chip:hover { transform: translateY(-1px); filter: saturate(1.15) brightness(1.02); border-color: var(--wc-ink, var(--accent)); }
+.word-chip:active { transform: scale(.95); }
+/* 와시(和紙) 팔레트에 어울리는 은은한 6색 — 카테고리별 순환 */
+.wc-0 { --wc-bg: #f3e7e2; --wc-line: #e4cfc7; --wc-ink: #a8513f; }  /* 주홍빛 */
+.wc-1 { --wc-bg: #e9efe6; --wc-line: #d3e0cd; --wc-ink: #4f7350; }  /* 쑥빛 */
+.wc-2 { --wc-bg: #e8edf3; --wc-line: #d2dde9; --wc-ink: #466089; }  /* 쪽빛 */
+.wc-3 { --wc-bg: #f4ecdd; --wc-line: #e7d8bd; --wc-ink: #9a7635; }  /* 치자빛 */
+.wc-4 { --wc-bg: #efe7f0; --wc-line: #ddd0e0; --wc-ink: #79568a; }  /* 등꽃빛 */
+.wc-5 { --wc-bg: #e7eeee; --wc-line: #cfe0df; --wc-ink: #3f7672; }  /* 청자빛 */
+html[data-theme="dark"] .wc-0 { --wc-bg: #3a2723; --wc-line: #523730; --wc-ink: #d99a87; }
+html[data-theme="dark"] .wc-1 { --wc-bg: #233027; --wc-line: #354a3a; --wc-ink: #9cc49d; }
+html[data-theme="dark"] .wc-2 { --wc-bg: #222d3a; --wc-line: #344459; --wc-ink: #9bb6da; }
+html[data-theme="dark"] .wc-3 { --wc-bg: #352c1d; --wc-line: #4d4029; --wc-ink: #d8b878; }
+html[data-theme="dark"] .wc-4 { --wc-bg: #2f2533; --wc-line: #43374a; --wc-ink: #c2a3d0; }
+html[data-theme="dark"] .wc-5 { --wc-bg: #20302e; --wc-line: #324845; --wc-ink: #8fc4bf; }
 .words-toggles { display: flex; gap: 6px; flex: none; }
 .words-tools .btn { flex: none; white-space: nowrap; }
 .words-tools .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
