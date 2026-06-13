@@ -299,7 +299,7 @@ function viewHome() {
     <div class="section-head"><h2>바로 가기</h2></div>
     <div class="option-grid">
       <a class="option-card" href="#/kana">
-        <b>가나 익히기 — <span class="jp">五十音</span></b><span>히라가나·카타카나 차트와 암기 카드</span>
+        <b>가나 익히기 — <span class="jp">五十音</span></b><span>히라가나·카타카나 차트와 랜덤 연습</span>
       </a>
       <a class="option-card" href="#/auto">
         <b>자동 학습 — <span class="jp">自動再生</span></b><span>듣기만 해도 되는 핸즈프리 음성 재생</span>
@@ -967,8 +967,13 @@ function autoLive(key) {
 
 /* ---------- 가나(五十音) 익히기 ---------- */
 const KANA = window.NIHONGO_KANA || { seion: [], dakuon: [], yoon: [] };
-let kanaSetup = { range: 'seion', dir: 'kana2read' };
-let kanaSession = null;
+let kanaMode = 'chart'; // chart | practice
+let kanaPractice = { range: 'seion', items: [], revealed: {} };
+
+function reshuffleKana() {
+  kanaPractice.items = shuffle(kanaPool(kanaPractice.range));
+  kanaPractice.revealed = {};
+}
 
 const KANA_SECTIONS = [
   { key: 'seion', title: '청음 — 五十音', intro: '일본어의 기본 46자입니다. 세로 단(あ・い・う・え・お)과 가로 행(あ행, か행…)으로 외워 두면 나중에 동사 활용이 훨씬 쉬워집니다. し는 [시], つ는 [츠]에 가깝고, 조사로 쓰일 때 は는 [와], へ는 [에]로 읽습니다.' },
@@ -995,32 +1000,68 @@ function kanaCellHtml(c) {
   </button>`;
 }
 
-function viewKana() {
+function kanaScriptSeg() {
   const sc = S.settings.kanaScript;
-  const q = kanaSetup;
-  const poolN = kanaPool(q.range).length;
-  const seg = (key, opts) => `<div class="seg seg-wide">${opts.map(([v, l]) =>
-    `<button class="${q[key] === v ? 'active' : ''}" data-action="k-set" data-key="${key}" data-val="${v}">${l}</button>`).join('')}</div>`;
-
   return `
-  <div class="view">
-    <h1 class="page-title">가나 익히기 — 五十音</h1>
-    <p class="page-sub">문장 학습 전 첫걸음. 글자를 누르면 발음을 들려줍니다. 차트로 눈에 익힌 뒤 암기 카드로 확인하세요.</p>
-
-    <section class="card kana-quiz-card">
-      <div class="kq-row"><label>범위</label>${seg('range', [['seion', '청음'], ['dakuon', '탁음·반탁음'], ['yoon', '요음'], ['all', '전체']])}</div>
-      <div class="kq-row"><label>방향</label>${seg('dir', [['kana2read', '가나 → 읽기'], ['read2kana', '읽기 → 가나']])}</div>
-      <button class="btn btn-primary" data-action="k-start">암기 카드 시작 (${Math.min(20, poolN)}문제)</button>
-    </section>
-
-    <div class="study-tools">
       <div class="seg" role="group" aria-label="문자 선택">
         <button class="${sc === 'hira' ? 'active' : ''} jp" data-action="kana-script" data-sc="hira">ひらがな</button>
         <button class="${sc === 'kata' ? 'active' : ''} jp" data-action="kana-script" data-sc="kata">カタカナ</button>
         <button class="${sc === 'both' ? 'active' : ''}" data-action="kana-script" data-sc="both">함께 보기</button>
-      </div>
-      <span class="filter-meta">청음 46 · 탁음 25 · 요음 33</span>
+      </div>`;
+}
+
+function practiceCellHtml(c, i) {
+  const sc = S.settings.kanaScript;
+  const main = sc === 'kata' ? c.k : c.h;
+  const alt = sc === 'both' ? `<i>${esc(c.k)}</i>` : '';
+  const rev = !!kanaPractice.revealed[i];
+  return `
+  <button class="kana-cell quiz ${rev ? 'revealed' : ''}" data-action="kana-reveal" data-i="${i}" data-ch="${esc(main)}" title="눌러서 발음 확인">
+    <span class="kc-char jp">${esc(main)}${alt}</span>
+    <span class="kc-sub">${rev ? `${esc(c.r)} · ${esc(c.ko)}` : '?'}</span>
+  </button>`;
+}
+
+function viewKanaPractice() {
+  if (!kanaPractice.items.length) reshuffleKana();
+  const revN = Object.keys(kanaPractice.revealed).length;
+  const ranges = [['all', '전체'], ['seion', '청음'], ['dakuon', '탁음·반탁음'], ['yoon', '요음']];
+  return `
+    <div class="study-tools">
+      ${kanaScriptSeg()}
+      <span class="filter-meta" id="kana-progress">${revN} / ${kanaPractice.items.length} 확인</span>
     </div>
+    <div class="filter-row">
+      ${ranges.map(([v, l]) => `<button class="filter-btn ${kanaPractice.range === v ? 'active' : ''}" data-action="kana-range" data-range="${v}">${l}</button>`).join('')}
+      <button class="btn btn-sm btn-ghost" data-action="kana-shuffle" style="margin-left:auto">⟳ 다시 섞기</button>
+    </div>
+    <p class="kana-intro">발음이 가려진 채 무작위로 섞여 있어요. 글자를 누르면 발음이 들리고 표기가 나타납니다. 막히는 글자는 차트에서 다시 확인하세요.</p>
+    <div class="kana-grid-free">
+      ${kanaPractice.items.map((c, i) => practiceCellHtml(c, i)).join('')}
+    </div>`;
+}
+
+function viewKana() {
+  return `
+  <div class="view">
+    <h1 class="page-title">가나 익히기 — 五十音</h1>
+    <p class="page-sub">문장 학습 전 첫걸음. 차트로 눈에 익힌 뒤, 랜덤 연습에서 발음을 가리고 떠올려 보세요.</p>
+
+    <div class="filter-row">
+      <div class="seg" role="group" aria-label="모드 전환" style="margin-right:auto">
+        <button class="${kanaMode === 'chart' ? 'active' : ''}" data-action="kana-mode" data-mode="chart">차트 보기</button>
+        <button class="${kanaMode === 'practice' ? 'active' : ''}" data-action="kana-mode" data-mode="practice">랜덤 연습</button>
+      </div>
+      ${kanaMode === 'chart' ? '<span class="filter-meta">청음 46 · 탁음 25 · 요음 33</span>' : ''}
+    </div>
+
+    ${kanaMode === 'practice' ? viewKanaPractice() : viewKanaChart()}
+  </div>`;
+}
+
+function viewKanaChart() {
+  return `
+    <div class="study-tools">${kanaScriptSeg()}</div>
 
     ${KANA_SECTIONS.map(sec => `
     <div class="section-head"><h2>${sec.title}</h2></div>
@@ -1038,96 +1079,7 @@ function viewKana() {
       <p><b class="jp">っ / ッ</b> <span>촉음 — 작은 つ. 받침처럼 소리를 한 박자 막습니다. <span class="jp">きって</span>[킷테], <span class="jp">ざっし</span>[잣시]</span></p>
       <p><b class="jp">ん / ン</b> <span>발음(撥音) — 뒤 소리에 따라 ㄴ·ㅁ·ㅇ 받침으로 들립니다. <span class="jp">さんぽ</span>[삼포], <span class="jp">てんき</span>[텡키]</span></p>
       <p><b class="jp">ー</b> <span>장음 — 앞 모음을 한 박자 길게. 히라가나는 모음을 겹쳐 쓰고(<span class="jp">おかあさん</span>), 카타카나는 ー를 씁니다(<span class="jp">コーヒー</span>)</span></p>
-    </section>
-  </div>`;
-}
-
-/* 가나 암기 카드 */
-function startKanaQuiz(items) {
-  let pool = items || shuffle(kanaPool(kanaSetup.range)).slice(0, 20);
-  if (!pool.length) { toast('출제할 글자가 없어요'); return; }
-  const sc = S.settings.kanaScript;
-  pool = pool.map(c => ({ ...c, front: sc === 'kata' ? c.k : sc === 'hira' ? c.h : (Math.random() < 0.5 ? c.h : c.k) }));
-  kanaSession = { items: pool, idx: 0, dir: kanaSetup.dir, flipped: false, wrong: [], right: 0 };
-  if (location.hash === '#/kana/quiz') render(); else location.hash = '#/kana/quiz';
-}
-
-function viewKanaRun() {
-  const ks = kanaSession;
-  if (!ks) { location.hash = '#/kana'; return ''; }
-  if (ks.idx >= ks.items.length) return viewKanaResult();
-  const it = ks.items[ks.idx];
-  const k2r = ks.dir === 'kana2read';
-  const pct = ks.idx / ks.items.length * 100;
-  return `
-  <div class="view quiz-run">
-    <div class="quiz-top">
-      <button class="icon-btn" data-action="k-exit" aria-label="그만두기" title="그만두기">${ICON.x}</button>
-      <div class="bar"><i style="width:${pct}%"></i></div>
-      <span class="q-count">${ks.idx + 1} / ${ks.items.length}</span>
-    </div>
-
-    <div class="flip-scene">
-      <div class="flip-card ${ks.flipped ? 'flipped' : ''}" data-action="k-flip" id="flip-card">
-        <div class="flip-face front">
-          <span class="q-label">${k2r ? '가나 → 읽기' : '읽기 → 가나'}</span>
-          ${k2r
-            ? `<div class="q-main jp kana-main">${esc(it.front)}</div>`
-            : `<div class="q-main kana-read">${esc(it.r)} <small>·</small> ${esc(it.ko)}</div>`}
-          <span class="tap-hint">카드를 누르면 답이 보여요</span>
-        </div>
-        <div class="flip-face back">
-          <div class="q-main jp kana-main-sm">${esc(it.h)}<span class="kana-alt jp">・${esc(it.k)}</span></div>
-          <div class="q-sub"><b>${esc(it.r)}</b> · ${esc(it.ko)}</div>
-          <button class="s-btn" data-action="kana-speak" data-ch="${esc(it.h)}">${ICON.play} 듣기</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="quiz-actions" style="visibility:${ks.flipped ? 'visible' : 'hidden'}">
-      <button class="btn btn-no" data-action="k-no">✕ 몰라요</button>
-      <button class="btn btn-ok" data-action="k-ok">◯ 알아요</button>
-    </div>
-    <p class="quiz-kbd"><kbd>Space</kbd> 뒤집기 · <kbd>←</kbd>/<kbd>X</kbd> 몰라요 · <kbd>→</kbd>/<kbd>O</kbd> 알아요</p>
-  </div>`;
-}
-
-function viewKanaResult() {
-  const ks = kanaSession;
-  const total = ks.items.length;
-  const pct = total ? ks.right / total : 0;
-  const cheer = pct === 1 ? '完璧！ 완벽해요' : pct >= 0.8 ? 'よくできました — 잘했어요' : pct >= 0.5 ? 'もう一歩 — 조금만 더' : '大丈夫、반복이 답입니다';
-  return `
-  <div class="view quiz-run">
-    <section class="card quiz-result">
-      ${ringSvg(pct, 120, 8, '정답률')}
-      <h2>${cheer}</h2>
-      <p class="sub">${total}글자 중 <b>${ks.right}글자</b>를 알고 있었어요</p>
-      <div class="result-actions">
-        ${ks.wrong.length ? `<button class="btn btn-primary" data-action="k-retry-wrong">틀린 ${ks.wrong.length}글자 다시</button>` : ''}
-        <button class="btn btn-ghost" data-action="k-retry-same">한 번 더</button>
-        <a class="btn btn-ghost" href="#/kana">차트로</a>
-      </div>
-      ${ks.wrong.length ? `
-      <div class="wrong-list kana-wrong">
-        ${ks.wrong.map(it => `
-          <div class="wrong-item kana-wrong-item">
-            <span class="jp kw-char">${esc(it.h)}<small>・${esc(it.k)}</small></span>
-            <span class="kw-read"><b>${esc(it.r)}</b> · ${esc(it.ko)}</span>
-          </div>`).join('')}
-      </div>` : ''}
-    </section>
-  </div>`;
-}
-
-function answerKana(ok) {
-  const ks = kanaSession;
-  if (!ks || !ks.flipped) return;
-  if (ok) ks.right++; else ks.wrong.push(ks.items[ks.idx]);
-  touchActivity();
-  ks.idx++;
-  ks.flipped = false;
-  render();
+    </section>`;
 }
 
 /* ---------- 뷰: 검색 ---------- */
@@ -1293,7 +1245,6 @@ function render() {
     }
     html = viewAutoSetup(); nav = 'auto';
   }
-  else if (page === 'kana' && seg[1] === 'quiz') { html = viewKanaRun(); nav = 'kana'; }
   else if (page === 'kana') { html = viewKana(); nav = 'kana'; }
   else if (page === 'search') { html = viewSearch(); nav = 'search'; }
   else { html = viewHome(); }
@@ -1319,7 +1270,7 @@ function render() {
         el.classList.add('flash');
       });
     }
-  } else if (!(page === 'quiz' && seg[1] === 'run') && !(page === 'kana' && seg[1] === 'quiz')) {
+  } else if (!(page === 'quiz' && seg[1] === 'run')) {
     window.scrollTo(0, 0);
   }
 
@@ -1477,21 +1428,25 @@ document.addEventListener('click', e => {
     case 'auto-quick': S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
     case 'kana-script': S.settings.kanaScript = t.dataset.sc; save(); render(); break;
     case 'kana-speak': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
-    case 'k-set': kanaSetup[t.dataset.key] = t.dataset.val; render(); break;
-    case 'k-start': startKanaQuiz(); break;
-    case 'k-flip':
-      if (e.target.closest('[data-action="kana-speak"]')) break;
-      if (kanaSession && !kanaSession.flipped) {
-        kanaSession.flipped = true;
-        $('#flip-card').classList.add('flipped');
-        const ka = $('.quiz-actions'); if (ka) ka.style.visibility = 'visible';
+    case 'kana-mode': kanaMode = t.dataset.mode; render(); break;
+    case 'kana-range': kanaPractice.range = t.dataset.range; reshuffleKana(); render(); break;
+    case 'kana-shuffle': reshuffleKana(); render(); toast('새로 섞었어요'); break;
+    case 'kana-reveal': {
+      const i = Number(t.dataset.i);
+      const c = kanaPractice.items[i];
+      if (!c) break;
+      speak(t.dataset.ch, t);
+      if (!kanaPractice.revealed[i]) {
+        kanaPractice.revealed[i] = 1;
+        t.classList.add('revealed');
+        const sub = t.querySelector('.kc-sub'); if (sub) sub.textContent = `${c.r} · ${c.ko}`;
+        const n = Object.keys(kanaPractice.revealed).length;
+        const pg = $('#kana-progress'); if (pg) pg.textContent = `${n} / ${kanaPractice.items.length} 확인`;
+        if (n === kanaPractice.items.length) toast('전부 확인했어요! ⟳ 다시 섞기로 한 번 더');
+        touchActivity();
       }
       break;
-    case 'k-ok': answerKana(true); break;
-    case 'k-no': answerKana(false); break;
-    case 'k-exit': kanaSession = null; location.hash = '#/kana'; break;
-    case 'k-retry-wrong': startKanaQuiz(shuffle(kanaSession.wrong)); break;
-    case 'k-retry-same': startKanaQuiz(); break;
+    }
 
     case 'auto-toggle': autoToggle(); break;
     case 'auto-prev': autoJump(-1); break;
@@ -1510,23 +1465,6 @@ document.addEventListener('change', e => {
   if (j && j.value) {
     const el = $('#all-ch-' + j.value);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-});
-
-document.addEventListener('keydown', e => {
-  const { seg } = parseHash();
-  if (!(seg[0] === 'kana' && seg[1] === 'quiz') || !kanaSession) return;
-  if (e.target.matches('input, select, textarea')) return;
-  if (kanaSession.idx >= kanaSession.items.length) return; // 결과 화면
-
-  if ((e.code === 'Space' || e.code === 'Enter') && !kanaSession.flipped) {
-    e.preventDefault();
-    kanaSession.flipped = true;
-    $('#flip-card').classList.add('flipped');
-    const ka = $('.quiz-actions'); if (ka) ka.style.visibility = 'visible';
-  } else if (kanaSession.flipped) {
-    if (e.code === 'ArrowRight' || e.key.toLowerCase() === 'o') { e.preventDefault(); answerKana(true); }
-    if (e.code === 'ArrowLeft' || e.key.toLowerCase() === 'x') { e.preventDefault(); answerKana(false); }
   }
 });
 
