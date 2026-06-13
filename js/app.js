@@ -145,7 +145,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function speak(text, btn) {
   if (!hasTTS) { toast('이 브라우저는 음성 재생을 지원하지 않아요'); return; }
   speechSynthesis.cancel();
-  $$('.s-btn.speaking, .kana-cell.speaking').forEach(b => b.classList.remove('speaking'));
+  $$('.speaking').forEach(b => b.classList.remove('speaking'));
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'ja-JP';
   if (jaVoice) u.voice = jaVoice;
@@ -444,13 +444,14 @@ function lessonHtml(ch) {
     </div>
     ${g.vocab && g.vocab.length ? `
     <div class="lesson-sec lesson-vocab-sec">
-      <h3><i class="jp">語彙</i>주요 어휘</h3>
+      <h3><i class="jp">語彙</i>주요 어휘 <small class="vocab-hint">· 단어를 누르면 발음을 들려줘요</small></h3>
       <div class="vocab-grid">
         ${g.vocab.map(v => `
-        <div class="vocab-item">
+        <button class="vocab-item" data-action="say" data-ch="${esc(v[1])}" title="${esc(v[1])} 발음 듣기">
+          <span class="vocab-spk">${ICON.play}</span>
           <ruby class="jp">${esc(v[0])}<rt>${esc(v[1])}</rt></ruby>
-          <span>${esc(v[2])}</span>
-        </div>`).join('')}
+          <span class="vocab-ko">${esc(v[2])}</span>
+        </button>`).join('')}
       </div>
     </div>` : ''}
   </section>`;
@@ -1431,6 +1432,7 @@ document.addEventListener('click', e => {
     }
     case 'auto-start': startAuto(); break;
     case 'auto-quick': S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
+    case 'say': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
     case 'kana-script': S.settings.kanaScript = t.dataset.sc; save(); render(); break;
     case 'kana-speak': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
     case 'kana-mode': kanaMode = t.dataset.mode; render(); break;
