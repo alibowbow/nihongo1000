@@ -487,6 +487,25 @@ function viewGrammar(id) {
 }
 
 /* ---------- 문법 해설 (교재 본문) ---------- */
+// 한·일 혼합 텍스트에서 '일본어 런'만 골라 탭하면 발음되는 버튼으로 감싼다(예문 듣기).
+const JP_RUN_RE = /[A-Za-z0-9→、。々「-』぀-ヿ一-鿿〜！（）？]+/g;
+const JP_HAS_RE = /[぀-ヿ一-鿿々]/; // 가나·한자 포함 여부
+function jpSayify(text) {
+  const s = String(text == null ? '' : text);
+  let out = '', last = 0, m;
+  JP_RUN_RE.lastIndex = 0;
+  while ((m = JP_RUN_RE.exec(s)) !== null) {
+    const run = m[0];
+    if (!JP_HAS_RE.test(run)) continue;          // 가나·한자 없는 런(한국어/숫자)은 그대로 둠
+    out += esc(s.slice(last, m.index));           // 앞쪽 비일본어 구간
+    const say = run.replace(/[「」『』（）()]/g, '').replace(/→/g, '、').trim();
+    out += `<button type="button" class="say-jp jp" data-action="say" data-ch="${esc(say)}" title="발음 듣기">${esc(run)}</button>`;
+    last = m.index + run.length;
+  }
+  out += esc(s.slice(last));
+  return out;
+}
+
 function lessonHtml(ch) {
   const g = GRAMMAR.find(x => x.id === ch.id);
   if (!g) return '';
@@ -495,26 +514,26 @@ function lessonHtml(ch) {
     <header class="lesson-head">
       <span class="lesson-label jp">文法</span>
       <div class="lesson-title">
-        <h2 class="lesson-formula jp">${esc(g.formula)}</h2>
-        <p class="lesson-gist">${esc(g.gist)}</p>
+        <h2 class="lesson-formula jp">${jpSayify(g.formula)}</h2>
+        <p class="lesson-gist">${jpSayify(g.gist)}</p>
       </div>
     </header>
-    <p class="lesson-intro">${esc(g.intro)}</p>
+    <p class="lesson-intro">${jpSayify(g.intro)}</p>
     <div class="lesson-grid">
       <div class="lesson-sec">
-        <h3><i class="jp">接続</i>접속 · 활용</h3>
+        <h3><i class="jp">接続</i>접속 · 활용 <small class="vocab-hint">· 예문을 누르면 발음 ▶</small></h3>
         <table class="lesson-table">
           ${g.forms.map(f => `
           <tr>
             <th>${esc(f[0])}</th>
-            <td><span class="jp">${esc(f[1])}</span>${f[2] ? `<small>${esc(f[2])}</small>` : ''}</td>
+            <td><span class="jp">${jpSayify(f[1])}</span>${f[2] ? `<small>${esc(f[2])}</small>` : ''}</td>
           </tr>`).join('')}
         </table>
       </div>
       <div class="lesson-sec">
-        <h3><i class="jp">要点</i>학습 포인트</h3>
+        <h3><i class="jp">要点</i>학습 포인트 <small class="vocab-hint">· 예문을 누르면 발음 ▶</small></h3>
         <ul class="lesson-points">
-          ${g.point.map(p => `<li>${esc(p)}</li>`).join('')}
+          ${g.point.map(p => `<li>${jpSayify(p)}</li>`).join('')}
         </ul>
       </div>
     </div>
