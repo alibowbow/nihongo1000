@@ -51,6 +51,12 @@ scripts/build-data.mjs   # 1000.md → js/data.js 변환기
 node scripts/build-data.mjs
 ```
 
+배포 직전에는 캐시 무효화를 위해 에셋 버전을 새로 찍습니다(이러면 사용자는 캐시를 비우거나 시크릿 없이, 일반 새로고침만으로 최신본을 받습니다).
+
+```bash
+node scripts/stamp-version.mjs
+```
+
 ## 학습법 (천일문 방식)
 
 1. 일본어 문장을 먼저 **소리 내어** 읽는다.
