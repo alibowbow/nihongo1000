@@ -5,10 +5,15 @@
 'use strict';
 
 const DATA = window.NIHONGO_DATA;
-const CHAPTERS = DATA.chapters;
-const SENTENCES = DATA.sentences;
-const GRAMMAR = window.NIHONGO_GRAMMAR || [];
-const TOTAL = SENTENCES.length;
+const COURSES = DATA.courses;                 // [{id,label,sub,chapters,sentences}]
+const GRAMMAR_ALL = window.NIHONGO_GRAMMAR || {};
+// 현재 코스 뷰 — setCourse()로 교체됨
+let CHAPTERS = [];
+let SENTENCES = [];
+let GRAMMAR = [];
+let TOTAL = 0;
+const courseMeta = id => COURSES.find(c => c.id === id) || COURSES[0];
+const courseLevels = () => [...new Set(CHAPTERS.map(c => c.level))]; // 코스에 등장하는 레벨(등장 순서)
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -36,13 +41,19 @@ const chapterOf = id => CHAPTERS[id - 1];
 /* ---------- 상태 (localStorage) ---------- */
 const STORE_KEY = 'nihongo1000.v1';
 
-const defaultState = () => ({
+// 코스별 진도 버킷 (문장 번호는 코스 안에서만 의미가 있음)
+const emptyProgress = () => ({
   learned: {},                 // n -> 1
   bookmarks: {},               // n -> 1
   weak: {},                    // n -> 틀린 횟수
-  streak: { last: '', count: 0 },
   today: { date: '', ns: {} }, // 오늘 학습한 문장 번호
   lastChapter: 0,
+});
+
+const defaultState = () => ({
+  courses: {},                 // courseId -> 진도
+  currentCourse: COURSES[0].id,
+  streak: { last: '', count: 0 }, // 연속 학습일은 코스 공통
   settings: {
     theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira',
     auto: { src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false },
@@ -54,10 +65,69 @@ try {
   const raw = localStorage.getItem(STORE_KEY);
   if (raw) {
     const saved = JSON.parse(raw);
+    // 구버전(단일 코스, 진도 필드가 최상위) → 기초 코스로 이관
+    if (saved && !saved.courses && (saved.learned || saved.bookmarks || saved.today || saved.lastChapter)) {
+      saved.courses = { basic: {
+        learned: saved.learned || {}, bookmarks: saved.bookmarks || {}, weak: saved.weak || {},
+        today: saved.today || { date: '', ns: {} }, lastChapter: saved.lastChapter || 0,
+      } };
+    }
     S = Object.assign(defaultState(), saved, { settings: Object.assign(defaultState().settings, saved.settings || {}) });
     S.settings.auto = Object.assign(defaultState().settings.auto, S.settings.auto || {});
+    S.courses = saved.courses || {};
+    S.streak = Object.assign({ last: '', count: 0 }, saved.streak || {});
   }
 } catch (e) { /* 손상된 데이터는 무시하고 초기 상태 사용 */ }
+
+// 사용 가능한 모든 코스에 진도 버킷을 보장
+COURSES.forEach(c => { if (!S.courses[c.id]) S.courses[c.id] = emptyProgress(); });
+if (!COURSES.some(c => c.id === S.currentCourse)) S.currentCourse = COURSES[0].id;
+
+let P; // 현재 코스의 진도 (learned/bookmarks/weak/today/lastChapter)
+function setCourse(id) {
+  const meta = courseMeta(id);
+  S.currentCourse = meta.id;
+  if (!S.courses[meta.id]) S.courses[meta.id] = emptyProgress();
+  P = S.courses[meta.id];
+  CHAPTERS = meta.chapters;
+  SENTENCES = meta.sentences;
+  GRAMMAR = GRAMMAR_ALL[meta.id] || [];
+  TOTAL = SENTENCES.length;
+}
+setCourse(S.currentCourse);
+
+/* ---------- 코스 전환 (기초/중급/최상급) ---------- */
+function courseSwitchHtml() {
+  if (COURSES.length < 2) return '';
+  return `
+  <div class="course-switch-head"><h2>학습 코스</h2><small>레벨에 맞춰 골라 학습하세요</small></div>
+  <section class="course-switch" role="group" aria-label="학습 코스 선택">
+    ${COURSES.map(c => {
+      const prog = S.courses[c.id] || { learned: {} };
+      const done = Object.keys(prog.learned).length;
+      const active = c.id === S.currentCourse;
+      return `
+      <button class="course-card ${active ? 'active' : ''}" data-action="set-course" data-course="${c.id}"${active ? ' aria-current="true"' : ''}>
+        <b>${esc(c.label)}</b>
+        <span class="cc-sub">${esc(c.sub)}</span>
+        <span class="cc-prog">${done} / ${c.sentences.length}</span>
+      </button>`;
+    }).join('')}
+  </section>`;
+}
+function switchCourse(id) {
+  if (id === S.currentCourse || !COURSES.some(c => c.id === id)) return;
+  if (autoPlayer) autoStop();
+  setCourse(id);
+  // 코스 경계를 넘는 임시 상태 초기화
+  chapterFilter = 'ALL'; allFilter = 'ALL';
+  quizSetup.ch = 1; quizSession = null;
+  S.settings.auto.ch = 1;
+  save();
+  location.hash = '#/';
+  render();
+  toast(`${courseMeta(id).label} 코스로 전환했어요`);
+}
 
 let saveTimer = null;
 function save() {
@@ -69,8 +139,8 @@ function save() {
 
 function touchActivity(n) {
   const today = todayStr();
-  if (S.today.date !== today) S.today = { date: today, ns: {} };
-  if (n) S.today.ns[n] = 1;
+  if (P.today.date !== today) P.today = { date: today, ns: {} };
+  if (n) P.today.ns[n] = 1;
 
   if (S.streak.last !== today) {
     const y = new Date(); y.setDate(y.getDate() - 1);
@@ -81,20 +151,20 @@ function touchActivity(n) {
   save();
 }
 
-const learnedCount = () => Object.keys(S.learned).length;
-const todayCount = () => (S.today.date === todayStr() ? Object.keys(S.today.ns).length : 0);
-const weakList = () => Object.keys(S.weak).map(Number).sort((a, b) => a - b);
-const bookmarkList = () => Object.keys(S.bookmarks).map(Number).sort((a, b) => a - b);
+const learnedCount = () => Object.keys(P.learned).length;
+const todayCount = () => (P.today.date === todayStr() ? Object.keys(P.today.ns).length : 0);
+const weakList = () => Object.keys(P.weak).map(Number).sort((a, b) => a - b);
+const bookmarkList = () => Object.keys(P.bookmarks).map(Number).sort((a, b) => a - b);
 
 function chapterProgress(ch) {
   let done = 0;
-  for (let n = ch.start; n <= ch.end; n++) if (S.learned[n]) done++;
+  for (let n = ch.start; n <= ch.end; n++) if (P.learned[n]) done++;
   return { done, total: ch.end - ch.start + 1 };
 }
 
 // 이어서 학습할 과: 마지막 방문 과가 미완이면 그곳, 아니면 첫 미완성 과
 function resumeChapter() {
-  let r = S.lastChapter ? chapterOf(S.lastChapter) : null;
+  let r = P.lastChapter ? chapterOf(P.lastChapter) : null;
   if (!r || chapterProgress(r).done === chapterProgress(r).total) {
     r = CHAPTERS.find(ch => chapterProgress(ch).done < chapterProgress(ch).total) || CHAPTERS[0];
   }
@@ -224,8 +294,8 @@ function viewHome() {
   const fresh = total === 0;
   const allDone = total === TOTAL;
 
-  // 레벨별 진행
-  const levels = ['N5', 'N4', 'N3'].map(lv => {
+  // 레벨별 진행 (현재 코스에 등장하는 레벨만)
+  const levels = courseLevels().map(lv => {
     const chs = CHAPTERS.filter(c => c.level === lv);
     let done = 0, tot = 0;
     chs.forEach(c => { const p = chapterProgress(c); done += p.done; tot += p.total; });
@@ -242,12 +312,13 @@ function viewHome() {
 
   return `
   <div class="view">
+    ${courseSwitchHtml()}
     <section class="card hero">
       <div class="hero-grid">
         <div>
           <span class="hero-kicker">Sentence-first Japanese</span>
           <h1>천 문장이 천 일의 힘이 됩니다</h1>
-          <p class="lead">핵심 문형 50과를 따라 하루 20문장씩, 소리 내어 읽고 가리고 바꿔 말하는 천일문 학습법으로 일본어의 뼈대를 세워 보세요.</p>
+          <p class="lead">핵심 문형 ${CHAPTERS.length}과를 따라 하루 20문장씩, 소리 내어 읽고 가리고 바꿔 말하는 천일문 학습법으로 일본어의 뼈대를 세워 보세요.</p>
           <div class="hero-cta">
             <a class="btn btn-primary btn-lg" href="#/study/${resume.id}">
               ${fresh ? '학습 시작하기' : allDone ? '복습 시작하기' : '이어서 학습하기'} ${ICON.arrowR}
@@ -315,10 +386,10 @@ function viewHome() {
         ${bookN ? `<span class="count">${bookN}</span>` : ''}
       </a>
       <a class="option-card" href="#/chapters?tab=grammar">
-        <b>문법 색인 — <span class="jp">文法</span></b><span>50개 핵심 문형 해설을 한눈에</span>
+        <b>문법 색인 — <span class="jp">文法</span></b><span>${CHAPTERS.length}개 핵심 문형 해설을 한눈에</span>
       </a>
       <a class="option-card" href="#/all">
-        <b>천문장 — <span class="jp">全文</span></b><span>1000문장을 한 화면에서 통독</span>
+        <b>천문장 — <span class="jp">全文</span></b><span>${TOTAL}문장을 한 화면에서 통독</span>
       </a>
       <a class="option-card" href="#/study/${resume.id}">
         <b>오늘의 20문장</b><span>${pad2(resume.id)}과 「${esc(resume.title)}」 이어가기</span>
@@ -331,13 +402,15 @@ function viewHome() {
 let chapterFilter = 'ALL';
 let chaptersTab = 'list';
 function viewChapters() {
-  const filters = ['ALL', 'N5', 'N4', 'N3'];
+  const filters = ['ALL', ...courseLevels()];
+  if (!filters.includes(chapterFilter)) chapterFilter = 'ALL';
   const list = CHAPTERS.filter(ch => chapterFilter === 'ALL' || ch.level === chapterFilter);
   const resumeId = resumeChapter().id;
   return `
   <div class="view">
+    ${courseSwitchHtml()}
     <h1 class="page-title">목차 — 五十課</h1>
-    <p class="page-sub">핵심 문형 50과, 과마다 20문장. 순서대로 읽어도 좋고 필요한 문형만 골라도 좋습니다.</p>
+    <p class="page-sub">핵심 문형 ${CHAPTERS.length}과, 과마다 20문장. 순서대로 읽어도 좋고 필요한 문형만 골라도 좋습니다.</p>
     <div class="filter-row">
       <div class="seg" role="group" aria-label="보기 전환" style="margin-right:auto">
         <button class="${chaptersTab === 'list' ? 'active' : ''}" data-action="ch-tab" data-tab="list">과 목록</button>
@@ -469,8 +542,8 @@ function maskWrap(inner, masked) {
 
 function sentenceCard(s) {
   const mode = S.settings.hideMode; // all | hideKo | hideJp
-  const learned = !!S.learned[s.n];
-  const booked = !!S.bookmarks[s.n];
+  const learned = !!P.learned[s.n];
+  const booked = !!P.bookmarks[s.n];
   return `
   <article class="s-card ${learned ? 'is-learned' : ''}" id="s-${s.n}" data-n="${s.n}">
     <div class="s-top">
@@ -490,7 +563,7 @@ function sentenceCard(s) {
 function viewStudy(id) {
   const ch = chapterOf(id);
   if (!ch) { location.hash = '#/chapters'; return ''; }
-  S.lastChapter = id; save();
+  P.lastChapter = id; save();
 
   const p = chapterProgress(ch);
   const pct = Math.round(p.done / p.total * 100);
@@ -546,7 +619,7 @@ let allFilter = 'ALL';
 
 function allRow(s) {
   const mode = S.settings.hideMode;
-  const learned = !!S.learned[s.n];
+  const learned = !!P.learned[s.n];
   return `
   <div class="all-row" data-n="${s.n}">
     <a class="ar-num jp ${learned ? 'done' : ''}" href="#/study/${s.ch}?focus=${s.n}" title="${learned ? '학습 완료 · ' : ''}본문에서 보기">${pad4(s.n)}</a>
@@ -560,15 +633,17 @@ function allRow(s) {
 
 function viewAll() {
   const mode = S.settings.hideMode;
+  const allFilters = ['ALL', ...courseLevels()];
+  if (!allFilters.includes(allFilter)) allFilter = 'ALL';
   const chs = CHAPTERS.filter(c => allFilter === 'ALL' || c.level === allFilter);
   const totalShown = chs.reduce((a, c) => a + (c.end - c.start + 1), 0);
   return `
   <div class="view">
-    <h1 class="page-title">천문장 — 全文 1000</h1>
-    <p class="page-sub">1000문장을 한 화면에서 통독하세요. 가리기로 암송 연습을, 번호를 누르면 해당 과 본문으로 이동합니다.</p>
+    <h1 class="page-title">천문장 — 全文 ${TOTAL}</h1>
+    <p class="page-sub">${TOTAL}문장을 한 화면에서 통독하세요. 가리기로 암송 연습을, 번호를 누르면 해당 과 본문으로 이동합니다.</p>
 
     <div class="filter-row">
-      ${['ALL', 'N5', 'N4', 'N3'].map(f => `<button class="filter-btn ${allFilter === f ? 'active' : ''}" data-action="all-filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
+      ${allFilters.map(f => `<button class="filter-btn ${allFilter === f ? 'active' : ''}" data-action="all-filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
       <span class="filter-meta">${chs.length}과 · ${totalShown}문장</span>
     </div>
 
@@ -630,7 +705,7 @@ function viewQuizSetup() {
 
     <div class="setup-row"><label>범위 선택</label>
       <div class="option-grid">
-        ${srcCard('random', '랜덤 20문장', '전체 1000문장에서 무작위 출제')}
+        ${srcCard('random', '랜덤 20문장', `전체 ${TOTAL}문장에서 무작위 출제`)}
         ${srcCard('chapter', '챕터 선택', '특정 과의 20문장으로 연습')}
         ${srcCard('weak', '복습 대기', '암기에서 틀렸던 문장만 다시', weakN, weakN === 0)}
         ${srcCard('book', '북마크', '북마크한 문장만 모아서', bookN, bookN === 0)}
@@ -756,11 +831,11 @@ function answerQuiz(ok) {
   const n = qs.items[qs.idx];
   if (ok) {
     qs.right++;
-    S.learned[n] = 1;
-    delete S.weak[n];
+    P.learned[n] = 1;
+    delete P.weak[n];
   } else {
     qs.wrong.push(n);
-    S.weak[n] = (S.weak[n] || 0) + 1;
+    P.weak[n] = (P.weak[n] || 0) + 1;
   }
   touchActivity(n);
   qs.idx++;
@@ -798,7 +873,7 @@ function viewAutoSetup() {
     <div class="setup-row"><label>재생 범위</label>
       <div class="option-grid">
         ${srcCard('chapter', '챕터', '한 과(20문장)를 순서대로')}
-        ${srcCard('all', '전체 1000', '1과부터 끝까지 이어 듣기')}
+        ${srcCard('all', `전체 ${TOTAL}`, '1과부터 끝까지 이어 듣기')}
         ${srcCard('book', '북마크', '북마크한 문장만', bookN, bookN === 0)}
         ${srcCard('weak', '복습 대기', '틀렸던 문장만', weakN, weakN === 0)}
       </div>
@@ -913,7 +988,7 @@ async function autoRun() {
     }
     if (!alive()) return;
     setAutoSpeaking(null);
-    if (!S.learned[n]) S.learned[n] = 1;
+    if (!P.learned[n]) P.learned[n] = 1;
     touchActivity(n); save();
     await sleep(A.gap);
     if (!alive()) return;
@@ -1214,7 +1289,7 @@ function viewSearch() {
   return `
   <div class="view">
     <h1 class="page-title">검색 — 探す</h1>
-    <p class="page-sub">일본어 · 한국어 뜻 · 문형 · 문장 번호로 1000문장을 바로 찾습니다.</p>
+    <p class="page-sub">일본어 · 한국어 뜻 · 문형 · 문장 번호로 ${TOTAL}문장을 바로 찾습니다.</p>
     <div class="search-box">
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="search" id="search-input" placeholder="예: 学校 / 학교 / たら / 0432" value="${esc(q)}" autocomplete="off" enterkeyhint="search">
@@ -1366,8 +1441,8 @@ function refreshStudyProgress() {
 }
 
 function toggleLearn(n, btn) {
-  const on = !S.learned[n];
-  if (on) { S.learned[n] = 1; touchActivity(n); } else { delete S.learned[n]; save(); }
+  const on = !P.learned[n];
+  if (on) { P.learned[n] = 1; touchActivity(n); } else { delete P.learned[n]; save(); }
   const card = $('#s-' + n);
   if (card) card.classList.toggle('is-learned', on);
   if (btn) {
@@ -1378,8 +1453,8 @@ function toggleLearn(n, btn) {
 }
 
 function toggleBook(n, btn) {
-  const on = !S.bookmarks[n];
-  if (on) S.bookmarks[n] = 1; else delete S.bookmarks[n];
+  const on = !P.bookmarks[n];
+  if (on) P.bookmarks[n] = 1; else delete P.bookmarks[n];
   save();
   if (btn) {
     btn.classList.toggle('on-book', on);
@@ -1407,13 +1482,16 @@ document.addEventListener('click', e => {
     case 'font-inc': S.settings.scale = Math.min(1.25, Math.round((S.settings.scale + 0.05) * 100) / 100); save(); applyScale(); openSettings(); break;
     case 'font-dec': S.settings.scale = Math.max(0.85, Math.round((S.settings.scale - 0.05) * 100) / 100); save(); applyScale(); openSettings(); break;
     case 'reset-data':
-      if (confirm('학습 완료·북마크·복습 기록을 모두 지웁니다. 계속할까요?')) {
-        const theme = S.settings.theme, scale = S.settings.scale;
+      if (confirm('모든 코스의 학습 완료·북마크·복습 기록을 지웁니다. 계속할까요?')) {
+        const theme = S.settings.theme, scale = S.settings.scale, cur = S.currentCourse;
         S = defaultState();
         S.settings.theme = theme; S.settings.scale = scale;
+        COURSES.forEach(c => { S.courses[c.id] = emptyProgress(); });
+        S.currentCourse = cur; setCourse(cur);
         save(); closeModal(); render(); toast('학습 기록을 초기화했어요');
       }
       break;
+    case 'set-course': switchCourse(t.dataset.course); break;
 
     case 'speak': {
       e.stopPropagation();
@@ -1443,7 +1521,7 @@ document.addEventListener('click', e => {
     }
     case 'mark-all': {
       const ch = chapterOf(Number(t.dataset.ch));
-      for (let n = ch.start; n <= ch.end; n++) { S.learned[n] = 1; touchActivity(n); }
+      for (let n = ch.start; n <= ch.end; n++) { P.learned[n] = 1; touchActivity(n); }
       save(); render(); toast(`${pad2(ch.id)}과 ${ch.end - ch.start + 1}문장을 완료로 표시했어요`);
       break;
     }

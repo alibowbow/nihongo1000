@@ -3,7 +3,8 @@
    각 과: formula(핵심 문형) · gist(한 줄 요약) · intro(의미/용법)
          forms(접속·활용표) · point(학습 포인트) · vocab(주요 어휘)
    ========================================================================== */
-window.NIHONGO_GRAMMAR = [
+window.NIHONGO_GRAMMAR = window.NIHONGO_GRAMMAR || {};
+window.NIHONGO_GRAMMAR.basic = [
 {
   id: 1, formula: 'NはNです', gist: '「A는 B입니다」 — 일본어 문장의 가장 기본이 되는 명사문',
   intro: '명사 두 개를 「は」와 「です」로 이으면 「A는 B입니다」라는 문장이 됩니다. 「は」는 주제를 제시하는 조사로, 표기는 は지만 발음은 [wa]입니다. 「です」는 정중함을 나타내는 말로, 명사 뒤에 그대로 붙입니다.',
