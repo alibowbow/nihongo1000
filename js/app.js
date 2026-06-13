@@ -301,6 +301,9 @@ function viewHome() {
       <a class="option-card" href="#/kana">
         <b>가나 익히기 — <span class="jp">五十音</span></b><span>히라가나·카타카나 차트와 랜덤 연습</span>
       </a>
+      <a class="option-card" href="#/words">
+        <b>단어장 — <span class="jp">語彙</span></b><span>숫자·조수사·요일·계절·가족 등 주제별 단어</span>
+      </a>
       <a class="option-card" href="#/auto">
         <b>자동 학습 — <span class="jp">自動再生</span></b><span>듣기만 해도 되는 핸즈프리 음성 재생</span>
       </a>
@@ -1088,6 +1091,60 @@ function viewKanaChart() {
     </section>`;
 }
 
+/* ---------- 단어장(語彙) ---------- */
+const WORDS = window.NIHONGO_WORDS || [];
+let wordsHideKo = false;
+
+function wordGridItem(it) {
+  const [disp, read, ko] = it;
+  const ruby = disp === read ? `<span class="jp">${esc(disp)}</span>` : `<ruby class="jp">${esc(disp)}<rt>${esc(read)}</rt></ruby>`;
+  return `
+  <button class="word-item" data-action="word-say" data-ch="${esc(read)}" title="${esc(read)} 발음 듣기">
+    <span class="wi-spk">${ICON.play}</span>
+    ${ruby}
+    <span class="word-ko">${esc(ko)}</span>
+  </button>`;
+}
+
+function wordTable(cat) {
+  return `
+  <div class="word-table-wrap">
+    <table class="word-table">
+      <thead><tr><th></th>${cat.cols.map(c => `<th><span class="jp">${esc(c.jp)}</span><small>${esc(c.ko)}</small></th>`).join('')}</tr></thead>
+      <tbody>
+        ${cat.rows.map(r => `<tr>
+          <th class="wt-num">${esc(r.num)}</th>
+          ${r.cells.map(cell => cell
+            ? `<td><button class="wt-cell jp" data-action="say" data-ch="${esc(cell)}" title="${esc(cell)} 발음 듣기">${esc(cell)}</button></td>`
+            : '<td class="wt-empty"></td>').join('')}
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function viewWords() {
+  return `
+  <div class="view ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
+    <h1 class="page-title">단어장 — 語彙</h1>
+    <p class="page-sub">주제별 핵심 단어를 모았어요. 단어를 누르면 발음을 들려줍니다. 숫자·조수사·날짜·요일·계절·가족까지 한자리에서.</p>
+
+    <div class="study-tools words-tools">
+      <div class="word-jump">
+        ${WORDS.map(c => `<button class="word-chip" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
+      </div>
+      <button class="btn btn-sm btn-ghost ${wordsHideKo ? 'on' : ''}" data-action="words-hide">${wordsHideKo ? '뜻 보이기' : '뜻 가리기'}</button>
+    </div>
+
+    ${WORDS.map(cat => `
+    <section class="word-sec" id="words-sec-${cat.id}">
+      <div class="section-head"><h2>${esc(cat.title)} <span class="jp ws-jp">${esc(cat.jp)}</span></h2></div>
+      ${cat.note ? `<p class="kana-intro">${esc(cat.note)}</p>` : ''}
+      ${cat.type === 'table' ? wordTable(cat) : `<div class="word-grid">${cat.items.map(wordGridItem).join('')}</div>`}
+    </section>`).join('')}
+  </div>`;
+}
+
 /* ---------- 뷰: 검색 ---------- */
 let searchQuery = '';
 function searchResults(q) {
@@ -1252,6 +1309,7 @@ function render() {
     html = viewAutoSetup(); nav = 'auto';
   }
   else if (page === 'kana') { html = viewKana(); nav = 'kana'; }
+  else if (page === 'words') { html = viewWords(); nav = 'words'; }
   else if (page === 'search') { html = viewSearch(); nav = 'search'; }
   else { html = viewHome(); }
 
@@ -1433,6 +1491,21 @@ document.addEventListener('click', e => {
     case 'auto-start': startAuto(); break;
     case 'auto-quick': S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
     case 'say': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
+    case 'word-say': { e.stopPropagation(); speak(t.dataset.ch, t); t.classList.add('revealed'); touchActivity(); break; }
+    case 'words-hide': {
+      wordsHideKo = !wordsHideKo;
+      const root = $('#words-root'); if (root) root.classList.toggle('words-hide', wordsHideKo);
+      t.classList.toggle('on', wordsHideKo);
+      t.textContent = wordsHideKo ? '뜻 보이기' : '뜻 가리기';
+      // 토글할 때마다 공개 상태 초기화 (켜면 전부 가려지고, 끄면 깔끔하게)
+      $$('.word-item.revealed').forEach(el => el.classList.remove('revealed'));
+      break;
+    }
+    case 'words-jump': {
+      const el = $('#words-sec-' + t.dataset.id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      break;
+    }
     case 'kana-script': S.settings.kanaScript = t.dataset.sc; save(); render(); break;
     case 'kana-speak': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
     case 'kana-mode': kanaMode = t.dataset.mode; render(); break;
