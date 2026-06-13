@@ -916,7 +916,8 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
   white-space: nowrap; transition: all .15s;
 }
 .word-chip:hover { border-color: var(--accent); color: var(--accent); }
-.words-tools .btn { flex: none; }
+.words-toggles { display: flex; gap: 6px; flex: none; }
+.words-tools .btn { flex: none; white-space: nowrap; }
 .words-tools .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
 
 .word-sec { margin-top: 26px; scroll-margin-top: 134px; }
@@ -945,6 +946,17 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .words-hide .word-ko { filter: blur(5px); transition: filter .2s; }
 .words-hide .word-item.revealed .word-ko { filter: none; }
 
+/* 발음(읽기) 기본 숨김 — 단어를 누르면 표시 */
+.read-hidden .word-item ruby rt { visibility: hidden; }
+.read-hidden .word-item.revealed ruby rt { visibility: visible; }
+.read-hidden .wt-cell { color: transparent; }
+.read-hidden .wt-cell::after {
+  content: '·'; position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--muted); font-weight: 700; pointer-events: none;
+}
+.read-hidden .wt-cell.revealed { color: inherit; }
+.read-hidden .wt-cell.revealed::after { content: none; }
+
 .word-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); -webkit-overflow-scrolling: touch; }
 .word-table { width: 100%; border-collapse: collapse; min-width: 320px; }
 .word-table th, .word-table td { text-align: center; padding: 0; border: 1px solid var(--line); }
@@ -953,6 +965,7 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .word-table thead th small { display: block; font-size: 10px; color: var(--muted); margin-top: 1px; white-space: nowrap; }
 .word-table .wt-num { width: 40px; background: var(--surface-2); font-size: 13px; font-weight: 700; color: var(--muted); }
 .wt-cell {
+  position: relative;
   width: 100%; padding: 10px 8px; font-size: 14.5px; font-weight: 500; line-height: 1.3;
   color: var(--ink); transition: background .12s, color .12s; white-space: nowrap;
 }

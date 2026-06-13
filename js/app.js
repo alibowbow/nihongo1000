@@ -1094,12 +1094,16 @@ function viewKanaChart() {
 /* ---------- 단어장(語彙) ---------- */
 const WORDS = window.NIHONGO_WORDS || [];
 let wordsHideKo = false;
+let wordsShowRead = false; // 발음(읽기) 기본 숨김 — 누르면 표시
 
 function wordGridItem(it) {
   const [disp, read, ko] = it;
-  const ruby = disp === read ? `<span class="jp">${esc(disp)}</span>` : `<ruby class="jp">${esc(disp)}<rt>${esc(read)}</rt></ruby>`;
+  // 한자어는 후리가나(rt)를 기본 숨김(CSS), 가나 단독 단어는 그대로 표시
+  const ruby = disp === read
+    ? `<span class="jp wi-kana">${esc(disp)}</span>`
+    : `<ruby class="jp">${esc(disp)}<rt>${esc(read)}</rt></ruby>`;
   return `
-  <button class="word-item" data-action="word-say" data-ch="${esc(read)}" title="${esc(read)} 발음 듣기">
+  <button class="word-item" data-action="word-say" data-ch="${esc(read)}" title="발음 듣기">
     <span class="wi-spk">${ICON.play}</span>
     ${ruby}
     <span class="word-ko">${esc(ko)}</span>
@@ -1115,7 +1119,7 @@ function wordTable(cat) {
         ${cat.rows.map(r => `<tr>
           <th class="wt-num">${esc(r.num)}</th>
           ${r.cells.map(cell => cell
-            ? `<td><button class="wt-cell jp" data-action="say" data-ch="${esc(cell)}" title="${esc(cell)} 발음 듣기">${esc(cell)}</button></td>`
+            ? `<td><button class="wt-cell jp" data-action="word-say" data-ch="${esc(cell)}" title="발음 듣기" data-read="${esc(cell)}">${esc(cell)}</button></td>`
             : '<td class="wt-empty"></td>').join('')}
         </tr>`).join('')}
       </tbody>
@@ -1125,15 +1129,18 @@ function wordTable(cat) {
 
 function viewWords() {
   return `
-  <div class="view ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
+  <div class="view ${wordsShowRead ? '' : 'read-hidden'} ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
     <h1 class="page-title">단어장 — 語彙</h1>
-    <p class="page-sub">주제별 핵심 단어를 모았어요. 단어를 누르면 발음을 들려줍니다. 숫자·조수사·날짜·요일·계절·가족까지 한자리에서.</p>
+    <p class="page-sub">발음은 가려져 있어요. 단어를 누르면 발음이 들리고 읽기가 나타납니다. 숫자·조수사·날짜·요일·계절·가족까지 한자리에서.</p>
 
     <div class="study-tools words-tools">
       <div class="word-jump">
         ${WORDS.map(c => `<button class="word-chip" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
       </div>
-      <button class="btn btn-sm btn-ghost ${wordsHideKo ? 'on' : ''}" data-action="words-hide">${wordsHideKo ? '뜻 보이기' : '뜻 가리기'}</button>
+      <div class="words-toggles">
+        <button class="btn btn-sm btn-ghost ${wordsShowRead ? 'on' : ''}" data-action="words-read">${wordsShowRead ? '발음 가리기' : '발음 보이기'}</button>
+        <button class="btn btn-sm btn-ghost ${wordsHideKo ? 'on' : ''}" data-action="words-hide">${wordsHideKo ? '뜻 보이기' : '뜻 가리기'}</button>
+      </div>
     </div>
 
     ${WORDS.map(cat => `
@@ -1498,7 +1505,15 @@ document.addEventListener('click', e => {
       t.classList.toggle('on', wordsHideKo);
       t.textContent = wordsHideKo ? '뜻 보이기' : '뜻 가리기';
       // 토글할 때마다 공개 상태 초기화 (켜면 전부 가려지고, 끄면 깔끔하게)
-      $$('.word-item.revealed').forEach(el => el.classList.remove('revealed'));
+      $$('.word-item.revealed, .wt-cell.revealed').forEach(el => el.classList.remove('revealed'));
+      break;
+    }
+    case 'words-read': {
+      wordsShowRead = !wordsShowRead;
+      const root = $('#words-root'); if (root) root.classList.toggle('read-hidden', !wordsShowRead);
+      t.classList.toggle('on', wordsShowRead);
+      t.textContent = wordsShowRead ? '발음 가리기' : '발음 보이기';
+      $$('.word-item.revealed, .wt-cell.revealed').forEach(el => el.classList.remove('revealed'));
       break;
     }
     case 'words-jump': {
