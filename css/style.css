@@ -854,7 +854,7 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .all-sec-head .s-btn { margin-left: auto; flex: none; }
 .all-list { padding: 2px 0; border-radius: var(--radius); }
 .all-row {
-  display: grid; grid-template-columns: 54px 1fr auto; gap: 2px 14px; align-items: start;
+  display: grid; grid-template-columns: 54px 1fr; gap: 2px 14px; align-items: start;
   padding: 11px 12px 11px 18px;
   border-top: 1px solid var(--line);
 }
@@ -866,12 +866,15 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 }
 .ar-num:hover { color: var(--accent); }
 .ar-num.done { color: var(--n5); }
-.ar-body { min-width: 0; }
+/* 본문을 누르면 발음(스피커 버튼 대체) */
+.ar-body { min-width: 0; cursor: pointer; border-radius: 9px; margin: -4px -8px; padding: 4px 8px; transition: background .12s; -webkit-tap-highlight-color: transparent; }
+.ar-body:hover { background: color-mix(in srgb, var(--accent-wash) 50%, transparent); }
+.ar-body.speaking { background: color-mix(in srgb, var(--accent-wash) 70%, transparent); }
+.ar-body.speaking .ar-jp { color: var(--accent-deep); }
 .ar-jp { margin: 0; font-size: calc(16px * var(--scale)); font-weight: 600; line-height: 1.75; overflow-wrap: anywhere; }
 .ar-ko { margin: 0; font-size: calc(12.5px * var(--scale)); color: var(--muted); line-height: 1.65; overflow-wrap: anywhere; }
-.all-row .s-btn.icon-only { padding: 6px 8px; align-self: center; }
 @media (max-width: 560px) {
-  .all-row { grid-template-columns: 42px 1fr auto; gap: 2px 10px; padding: 10px 8px 10px 14px; }
+  .all-row { grid-template-columns: 42px 1fr; gap: 2px 10px; padding: 10px 8px 10px 14px; }
 }
 
 /* ---------- 가나(五十音) 익히기 ---------- */

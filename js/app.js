@@ -642,11 +642,10 @@ function allRow(s) {
   return `
   <div class="all-row" data-n="${s.n}">
     <a class="ar-num jp ${learned ? 'done' : ''}" href="#/study/${s.ch}?focus=${s.n}" title="${learned ? '학습 완료 · ' : ''}본문에서 보기">${pad4(s.n)}</a>
-    <div class="ar-body">
+    <div class="ar-body" data-action="speak" data-n="${s.n}" title="발음 듣기">
       <p class="ar-jp jp">${maskWrap(esc(s.jp), mode === 'hideJp')}</p>
       <p class="ar-ko">${maskWrap(esc(s.ko), mode === 'hideKo')}</p>
     </div>
-    <button class="s-btn icon-only" data-action="speak" data-n="${s.n}" title="듣기" aria-label="듣기">${ICON.play}</button>
   </div>`;
 }
 
@@ -659,7 +658,7 @@ function viewAll() {
   return `
   <div class="view">
     <h1 class="page-title">천문장 — 全文 ${TOTAL}</h1>
-    <p class="page-sub">${TOTAL}문장을 한 화면에서 통독하세요. 가리기로 암송 연습을, 번호를 누르면 해당 과 본문으로 이동합니다.</p>
+    <p class="page-sub">${TOTAL}문장을 한 화면에서 통독하세요. 문장을 누르면 발음을 들려주고, 번호를 누르면 해당 과 본문으로 이동합니다.</p>
 
     <div class="filter-row">
       ${allFilters.map(f => `<button class="filter-btn ${allFilter === f ? 'active' : ''}" data-action="all-filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
