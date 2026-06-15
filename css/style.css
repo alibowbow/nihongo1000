@@ -644,6 +644,9 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .set-row:first-of-type { border-top: 0; }
 .set-row .lbl b { display: block; font-size: 14.5px; font-weight: 600; }
 .set-row .lbl span { font-size: 12px; color: var(--muted); }
+.set-row.col { flex-direction: column; align-items: stretch; gap: 9px; }
+.set-row.col .select-wrap { width: 100%; }
+.set-note { font-size: 12px; color: var(--muted); }
 .danger-zone { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line-strong); }
 .btn-danger { background: transparent; border: 1.5px solid var(--no); color: var(--no); width: 100%; }
 .btn-danger:hover { background: color-mix(in srgb, var(--no) 8%, transparent); }
@@ -1065,6 +1068,24 @@ html[data-theme="dark"] .wc-5 { --wc-bg: #20302e; --wc-line: #324845; --wc-ink: 
 .course-switch-head { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 9px; }
 .course-switch-head h2 { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
 .course-switch-head small { font-size: 12px; color: var(--muted); }
+
+/* ---------- 인앱 브라우저 음성 안내 배너 ---------- */
+.inapp-banner {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 90;
+  width: min(620px, calc(100% - 24px));
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 12px 12px 14px; border-radius: 14px;
+  background: var(--ink); color: var(--bg);
+  box-shadow: 0 12px 32px -10px rgba(0,0,0,.5);
+  font-size: 13px; line-height: 1.55;
+}
+.inapp-banner b { color: var(--gold); font-weight: 700; }
+.iab-ico { font-size: 16px; flex: none; }
+.iab-txt { flex: 1; min-width: 0; }
+.iab-x { flex: none; width: 26px; height: 26px; display: grid; place-items: center; cursor: pointer;
+  background: color-mix(in srgb, var(--bg) 18%, transparent); color: var(--bg); border: 0; border-radius: 8px; }
+.iab-x:hover { background: color-mix(in srgb, var(--bg) 30%, transparent); }
+@media (max-width: 760px) { .inapp-banner { bottom: calc(74px + env(safe-area-inset-bottom)); } }
 
 /* ---------- 모션 줄이기 ---------- */
 @media (prefers-reduced-motion: reduce) {

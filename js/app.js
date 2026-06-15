@@ -55,7 +55,7 @@ const defaultState = () => ({
   currentCourse: COURSES[0].id,
   streak: { last: '', count: 0 }, // 연속 학습일은 코스 공통
   settings: {
-    theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira',
+    theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira', voiceJa: '',
     auto: { src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false },
   },
 });
@@ -196,35 +196,78 @@ function toast(msg) {
 
 /* ---------- TTS ---------- */
 const hasTTS = 'speechSynthesis' in window;
+const UA = navigator.userAgent || '';
+// 카카오톡·인스타·페북·라인·네이버·다음 등 인앱 브라우저(WebView) 감지 — TTS가 막히는 환경
+const isInAppBrowser = /KAKAOTALK|FBAN|FBAV|FB_IAB|Instagram|Line\/|NAVER\(inapp|DaumApps|; wv\)/i.test(UA);
+const STORE_INAPP = 'nihongo1000.inapp-hidden';
+let ttsBlocked = false, ttsToastShown = false, speakGuard = 0;
+
 let jaVoice = null, koVoice = null;
+function jaVoiceList() { return hasTTS ? speechSynthesis.getVoices().filter(v => /^ja([-_]|$)/i.test(v.lang)) : []; }
 function pickVoice() {
   if (!hasTTS) return;
   const vs = speechSynthesis.getVoices();
-  jaVoice = vs.find(v => /^ja([-_]|$)/i.test(v.lang) && /google/i.test(v.name))
-    || vs.find(v => /^ja([-_]|$)/i.test(v.lang)) || null;
+  const ja = vs.filter(v => /^ja([-_]|$)/i.test(v.lang));
+  const saved = S.settings.voiceJa;
+  jaVoice = (saved && ja.find(v => v.voiceURI === saved))   // 사용자가 고른 음성 우선
+    || ja.find(v => /google/i.test(v.name)) || ja[0] || null;
   koVoice = vs.find(v => /^ko([-_]|$)/i.test(v.lang) && /google/i.test(v.name))
     || vs.find(v => /^ko([-_]|$)/i.test(v.lang)) || null;
 }
 if (hasTTS) {
   pickVoice();
-  speechSynthesis.addEventListener('voiceschanged', pickVoice);
+  speechSynthesis.addEventListener('voiceschanged', () => {
+    pickVoice();
+    if ($('#modal-root') && $('#modal-root').firstChild) openSettings(); // 설정 열려 있으면 음성 목록 갱신
+  });
+}
+
+/* 인앱 브라우저 음성 차단 안내 배너 */
+function inAppNoticeOn() {
+  try { if (localStorage.getItem(STORE_INAPP)) return false; } catch (e) {}
+  return isInAppBrowser || ttsBlocked;
+}
+function mountInAppBanner() {
+  if (!inAppNoticeOn() || document.getElementById('inapp-banner')) return;
+  const d = document.createElement('div');
+  d.id = 'inapp-banner'; d.className = 'inapp-banner'; d.setAttribute('role', 'status');
+  d.innerHTML = `<span class="iab-ico" aria-hidden="true">🔇</span>`
+    + `<span class="iab-txt">카카오톡 등 <b>인앱 브라우저</b>에서는 음성이 안 나올 수 있어요. 우측 메뉴(⋮ 또는 공유) → <b>다른 브라우저로 열기</b>로 열어 주세요.</span>`
+    + `<button class="iab-x" type="button" data-action="inapp-dismiss" aria-label="닫기">${ICON.x}</button>`;
+  document.body.appendChild(d);
+}
+function noticeTTSFail(unsupported) {
+  ttsBlocked = true;
+  mountInAppBanner();
+  if (!ttsToastShown) {
+    ttsToastShown = true;
+    toast(unsupported ? '이 브라우저는 음성 재생을 지원하지 않아요. 다른 브라우저로 열어 주세요.'
+                      : '음성이 재생되지 않아요. 크롬·사파리 등 다른 브라우저로 열어 주세요.');
+  }
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function speak(text, btn) {
-  if (!hasTTS) { toast('이 브라우저는 음성 재생을 지원하지 않아요'); return; }
+  if (!hasTTS) { noticeTTSFail(true); return; }
   speechSynthesis.cancel();
   $$('.speaking').forEach(b => b.classList.remove('speaking'));
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'ja-JP';
   if (jaVoice) u.voice = jaVoice;
   u.rate = 0.92;
+  let started = false;
+  u.onstart = () => { started = true; };
   if (btn) {
     btn.classList.add('speaking');
     u.onend = u.onerror = () => btn.classList.remove('speaking');
   }
   speechSynthesis.speak(u);
+  // 인앱 등에서 소리 없이 실패하는 경우 감지 → 안내
+  clearTimeout(speakGuard);
+  speakGuard = setTimeout(() => {
+    if (!started && !speechSynthesis.speaking) { if (btn) btn.classList.remove('speaking'); noticeTTSFail(false); }
+  }, 1500);
 }
 
 // 자동 학습용: 한 문장을 끝까지 읽고 끝나면 resolve (취소·오류·안전 타임아웃 포함)
@@ -1340,6 +1383,21 @@ function openSettings() {
           <button data-action="font-inc" aria-label="크게">＋</button>
         </div>
       </div>
+      <div class="set-row col">
+        <div class="lbl"><b>일본어 음성</b><span>기기에 설치된 음성 중에서 선택 (사람마다 다르게 들리는 이유예요)</span></div>
+        ${(() => {
+          const jv = jaVoiceList();
+          if (!hasTTS || !jv.length) return `<span class="set-note">${isInAppBrowser
+            ? '인앱 브라우저에서는 음성을 쓸 수 없어요. ⋮ → 다른 브라우저로 열어 주세요.'
+            : '이 브라우저에서 쓸 수 있는 일본어 음성이 없어요.'}</span>`;
+          return `<div class="select-wrap">
+            <select data-action="set-voice" aria-label="일본어 음성 선택">
+              <option value="">자동 (기기 기본)</option>
+              ${jv.map(v => `<option value="${esc(v.voiceURI)}"${S.settings.voiceJa === v.voiceURI ? ' selected' : ''}>${esc(v.name)}</option>`).join('')}
+            </select>
+          </div><span class="set-note">선택하면 미리듣기가 재생돼요.</span>`;
+        })()}
+      </div>
       <div class="danger-zone">
         <button class="btn btn-danger" data-action="reset-data">학습 기록 전체 초기화</button>
       </div>
@@ -1495,6 +1553,11 @@ document.addEventListener('click', e => {
       break;
     }
     case 'open-settings': openSettings(); break;
+    case 'inapp-dismiss': {
+      try { localStorage.setItem(STORE_INAPP, '1'); } catch (e) {}
+      const b = document.getElementById('inapp-banner'); if (b) b.remove();
+      break;
+    }
     case 'close-modal': if (t === e.target || t.closest('.icon-btn')) closeModal(); break;
     case 'set-theme': S.settings.theme = t.dataset.theme; save(); applyTheme(); openSettings(); break;
     case 'font-inc': S.settings.scale = Math.min(1.25, Math.round((S.settings.scale + 0.05) * 100) / 100); save(); applyScale(); openSettings(); break;
@@ -1652,6 +1715,11 @@ document.addEventListener('change', e => {
   if (t) { quizSetup.ch = Number(t.value); }
   const a = e.target.closest('[data-action="auto-ch"]');
   if (a) { S.settings.auto.ch = Number(a.value); save(); }
+  const v = e.target.closest('[data-action="set-voice"]');
+  if (v) {
+    S.settings.voiceJa = v.value; save(); pickVoice();
+    if (hasTTS && v.value) speak('これは日本語の音声サンプルです。'); // 미리듣기
+  }
   const j = e.target.closest('[data-action="all-jump"]');
   if (j && j.value) {
     const el = $('#all-ch-' + j.value);
@@ -1704,5 +1772,6 @@ applyTheme();
 applyScale();
 if (!location.hash) location.hash = '#/';
 render();
+mountInAppBanner();   // 인앱 브라우저면 음성 안내 배너 표시
 
 })();
