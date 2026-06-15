@@ -55,7 +55,7 @@ const defaultState = () => ({
   currentCourse: COURSES[0].id,
   streak: { last: '', count: 0 }, // 연속 학습일은 코스 공통
   settings: {
-    theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira', voiceJa: '',
+    theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira', voiceJa: '', pitch: 1,
     auto: { src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false },
   },
 });
@@ -204,6 +204,13 @@ let ttsBlocked = false, ttsToastShown = false, speakGuard = 0;
 
 let jaVoice = null, koVoice = null;
 function jaVoiceList() { return hasTTS ? speechSynthesis.getVoices().filter(v => /^ja([-_]|$)/i.test(v.lang)) : []; }
+const ttsPitch = () => Number(S.settings.pitch) || 1;
+// 음성 이름으로 성별 추정(알려진 일본어 음성만) — 목록 라벨용
+const VOICE_GENDER = [
+  [/kyoko|o-?ren|haruka|sayaka|nanami|ayumi|mizuki|ichika|google 日本語|女性|female|woman/i, '여성'],
+  [/otoya|ichiro|hattori|daichi|keita|naoki|男性|male|\bman\b/i, '남성'],
+];
+function voiceGender(name) { for (const [re, g] of VOICE_GENDER) if (re.test(name || '')) return g; return ''; }
 function pickVoice() {
   if (!hasTTS) return;
   const vs = speechSynthesis.getVoices();
@@ -256,6 +263,7 @@ function speak(text, btn) {
   u.lang = 'ja-JP';
   if (jaVoice) u.voice = jaVoice;
   u.rate = 0.92;
+  u.pitch = ttsPitch();
   let started = false;
   u.onstart = () => { started = true; };
   if (btn) {
@@ -279,6 +287,7 @@ function speakAsync(text, lang, rate) {
     const v = lang.indexOf('ja') === 0 ? jaVoice : koVoice;
     if (v) u.voice = v;
     u.rate = rate;
+    u.pitch = ttsPitch();
     let done = false;
     const fin = () => { if (!done) { done = true; clearTimeout(guard); resolve(); } };
     u.onend = fin;
@@ -1393,10 +1402,17 @@ function openSettings() {
           return `<div class="select-wrap">
             <select data-action="set-voice" aria-label="일본어 음성 선택">
               <option value="">자동 (기기 기본)</option>
-              ${jv.map(v => `<option value="${esc(v.voiceURI)}"${S.settings.voiceJa === v.voiceURI ? ' selected' : ''}>${esc(v.name)}</option>`).join('')}
+              ${jv.map(v => { const g = voiceGender(v.name); return `<option value="${esc(v.voiceURI)}"${S.settings.voiceJa === v.voiceURI ? ' selected' : ''}>${esc(v.name)}${g ? ` (${g})` : ''}</option>`; }).join('')}
             </select>
-          </div><span class="set-note">선택하면 미리듣기가 재생돼요.</span>`;
+          </div><span class="set-note">선택하면 미리듣기 재생. 목록이 하나뿐이면 기기 설정에서 음성을 추가 설치할 수 있어요 — iOS: 설정→손쉬운 사용→읽어 주기 콘텐츠→음성→일본어, Android: 설정→음성/TTS에서 음성 데이터 추가.</span>`;
         })()}
+      </div>
+      <div class="set-row">
+        <div class="lbl"><b>음성 톤(음높이)</b><span>음성이 하나뿐일 때 톤으로 남성·여성 느낌 흉내 (완전한 전환은 아니에요)</span></div>
+        <div class="seg">
+          ${[['0.8', '낮게'], ['1', '기본'], ['1.3', '높게']].map(([val, l]) =>
+            `<button class="${String(ttsPitch()) === val ? 'active' : ''}" data-action="set-pitch" data-val="${val}">${l}</button>`).join('')}
+        </div>
       </div>
       <div class="danger-zone">
         <button class="btn btn-danger" data-action="reset-data">학습 기록 전체 초기화</button>
@@ -1562,6 +1578,7 @@ document.addEventListener('click', e => {
     case 'set-theme': S.settings.theme = t.dataset.theme; save(); applyTheme(); openSettings(); break;
     case 'font-inc': S.settings.scale = Math.min(1.25, Math.round((S.settings.scale + 0.05) * 100) / 100); save(); applyScale(); openSettings(); break;
     case 'font-dec': S.settings.scale = Math.max(0.85, Math.round((S.settings.scale - 0.05) * 100) / 100); save(); applyScale(); openSettings(); break;
+    case 'set-pitch': S.settings.pitch = Number(t.dataset.val); save(); openSettings(); if (hasTTS) speak('これは日本語の音声サンプルです。'); break;
     case 'reset-data':
       if (confirm('모든 코스의 학습 완료·북마크·복습 기록을 지웁니다. 계속할까요?')) {
         const theme = S.settings.theme, scale = S.settings.scale, cur = S.currentCourse;
