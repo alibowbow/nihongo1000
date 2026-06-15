@@ -1408,7 +1408,7 @@ function openSettings() {
         })()}
       </div>
       <div class="set-row">
-        <div class="lbl"><b>음성 톤(음높이)</b><span>음성이 하나뿐일 때 톤으로 남성·여성 느낌 흉내 (완전한 전환은 아니에요)</span></div>
+        <div class="lbl"><b>음성 톤(음높이)</b></div>
         <div class="seg">
           ${[['0.8', '낮게'], ['1', '기본'], ['1.3', '높게']].map(([val, l]) =>
             `<button class="${String(ttsPitch()) === val ? 'active' : ''}" data-action="set-pitch" data-val="${val}">${l}</button>`).join('')}
