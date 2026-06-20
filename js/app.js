@@ -1240,6 +1240,7 @@ function viewKanaChart() {
 const WORDS = window.NIHONGO_WORDS || [];
 let wordsHideKo = false;
 let wordsShowRead = false; // 발음(읽기) 기본 숨김 — 누르면 표시
+let wordsLevel = '전체';   // 단어장 레벨 필터: 전체 / 기초 / N2 / N1
 
 function wordGridItem(it) {
   const [disp, read, ko] = it;
@@ -1272,15 +1273,26 @@ function wordTable(cat) {
   </div>`;
 }
 
+const wordLevel = c => c.level || '기초';
+const wordCount = c => c.items ? c.items.length : (c.rows ? c.rows.length : 0);
 function viewWords() {
+  const levels = ['전체', '기초', 'N2', 'N1'];
+  if (!levels.includes(wordsLevel)) wordsLevel = '전체';
+  const list = WORDS.filter(c => wordsLevel === '전체' || wordLevel(c) === wordsLevel);
+  const total = list.reduce((a, c) => a + wordCount(c), 0);
   return `
   <div class="view ${wordsShowRead ? '' : 'read-hidden'} ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
     <h1 class="page-title">단어장 — 語彙</h1>
-    <p class="page-sub">발음은 가려져 있어요. 단어를 누르면 발음이 들리고 읽기가 나타납니다. 숫자·조수사·날짜·요일·계절·가족까지 한자리에서.</p>
+    <p class="page-sub">단어를 누르면 발음이 들리고 읽기가 나타납니다. 기초 어휘부터 JLPT N2·N1까지 한자리에서.</p>
+
+    <div class="filter-row">
+      ${levels.map(f => `<button class="filter-btn ${wordsLevel === f ? 'active' : ''}" data-action="words-level" data-level="${f}">${f}</button>`).join('')}
+      <span class="filter-meta">${list.length}분류 · ${total}단어</span>
+    </div>
 
     <div class="study-tools words-tools">
       <div class="word-jump">
-        ${WORDS.map((c, i) => `<button class="word-chip wc-${i % 6}" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
+        ${list.map((c, i) => `<button class="word-chip wc-${i % 6}" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
       </div>
       <div class="words-toggles">
         <button class="btn btn-sm btn-ghost ${wordsShowRead ? 'on' : ''}" data-action="words-read">${wordsShowRead ? '발음 가리기' : '발음 보이기'}</button>
@@ -1288,9 +1300,9 @@ function viewWords() {
       </div>
     </div>
 
-    ${WORDS.map(cat => `
+    ${list.map(cat => `
     <section class="word-sec" id="words-sec-${cat.id}">
-      <div class="section-head"><h2>${esc(cat.title)} <span class="jp ws-jp">${esc(cat.jp)}</span></h2></div>
+      <div class="section-head"><h2>${esc(cat.title)}${cat.jp ? ` <span class="jp ws-jp">${esc(cat.jp)}</span>` : ''}${wordLevel(cat) !== '기초' ? ` ${levelChip(wordLevel(cat))}` : ''}</h2></div>
       ${cat.note ? `<p class="kana-intro">${esc(cat.note)}</p>` : ''}
       ${cat.type === 'table' ? wordTable(cat) : `<div class="word-grid">${cat.items.map(wordGridItem).join('')}</div>`}
     </section>`).join('')}
@@ -1690,6 +1702,10 @@ document.addEventListener('click', e => {
       t.classList.toggle('on', wordsShowRead);
       t.textContent = wordsShowRead ? '발음 가리기' : '발음 보이기';
       $$('.word-item.revealed, .wt-cell.revealed').forEach(el => el.classList.remove('revealed'));
+      break;
+    }
+    case 'words-level': {
+      if (wordsLevel !== t.dataset.level) { wordsLevel = t.dataset.level; render(); }
       break;
     }
     case 'words-jump': {
