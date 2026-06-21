@@ -58,7 +58,8 @@ const defaultState = () => ({
   wordWeak: {},                // 단어 복습 대기: key -> 틀린 횟수 (코스 공통)
   settings: {
     theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira', voiceJa: '', pitch: 1,
-    auto: { src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false },
+    auto: { kind: 'sentence', src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false,
+            wsrc: 'random', wlevel: 'N5', wcat: '' },
   },
 });
 
@@ -1079,21 +1080,61 @@ function autoPool(src, ch) {
   return [];
 }
 
+function autoWordPool() {
+  const a = S.settings.auto;
+  if (a.wsrc === 'cat') {
+    const c = GRID_CATS.find(x => x.id === a.wcat) || GRID_CATS[0];
+    if (!c) return [];
+    return c.items.map(it => WORD_INDEX.get(it[0] + '|' + it[1])
+      || { key: it[0] + '|' + it[1], disp: it[0], read: it[1], ko: it[2], level: c.level || '기초', cat: c.title });
+  }
+  if (a.wsrc === 'level') return ALL_WORDS.filter(w => w.level === a.wlevel);
+  if (a.wsrc === 'weak') return Object.keys(S.wordWeak).map(k => WORD_INDEX.get(k)).filter(Boolean);
+  return shuffle(ALL_WORDS).slice(0, 30); // random
+}
+
 function viewAutoSetup() {
   const a = S.settings.auto;
-  const bookN = bookmarkList().length, weakN = weakList().length;
-  const srcCard = (key, title, sub, count, disabled) => `
-    <button class="option-card ${a.src === key ? 'active' : ''}" data-action="auto-src" data-src="${key}" ${disabled ? 'disabled' : ''}>
-      <b>${title}</b><span>${sub}</span>${count != null ? `<span class="count">${count}</span>` : ''}
-    </button>`;
+  const k = a.kind === 'word' ? 'word' : 'sentence';
   const seg = (key, opts) => `<div class="seg seg-wide">${opts.map(([v, l]) =>
     `<button class="${String(a[key]) === String(v) ? 'active' : ''}" data-action="auto-set" data-key="${key}" data-val="${v}">${l}</button>`).join('')}</div>`;
 
   return `
   <div class="view quiz-setup">
     <h1 class="page-title">자동 학습 — 自動再生</h1>
-    <p class="page-sub">손대지 않아도 카드가 저절로 넘어가며 일본어와 한국어를 차례로 읽어 줍니다. 출퇴근·설거지·잠들기 전 듣기 연습에 좋아요.</p>
+    <p class="page-sub">손대지 않아도 카드가 저절로 넘어가며 ${k === 'word' ? '단어의 읽기와 뜻을' : '일본어와 한국어를'} 차례로 읽어 줍니다. 출퇴근·설거지·잠들기 전 듣기 연습에 좋아요.</p>
 
+    <div class="seg seg-wide quiz-kind">
+      <button class="${k === 'sentence' ? 'active' : ''}" data-action="auto-kind" data-kind="sentence">📖 문장 듣기</button>
+      <button class="${k === 'word' ? 'active' : ''}" data-action="auto-kind" data-kind="word">🗂️ 단어 듣기</button>
+    </div>
+
+    ${k === 'word' ? autoSetupWordBody() : autoSetupSentenceBody()}
+
+    <div class="setup-row"><label>${k === 'word' ? '뜻 음성' : '한국어 음성'}</label>${seg('readKo', [[true, k === 'word' ? '일본어 + 뜻' : '일본어 + 한국어'], [false, '일본어만']])}</div>
+
+    <div class="setup-grid">
+      <div><label>${k === 'word' ? '읽기 반복' : '일본어 반복'}</label>${seg('repeat', [[1, '1회'], [2, '2회'], [3, '3회']])}</div>
+      <div><label>재생 속도</label>${seg('rate', [[0.7, '느리게'], [0.9, '보통'], [1.1, '빠르게']])}</div>
+      <div><label>${k === 'word' ? '단어 간격' : '문장 간격'}</label>${seg('gap', [[400, '짧게'], [900, '보통'], [1600, '길게']])}</div>
+      <div><label>Loop</label>${seg('loop', [[false, '끄기'], [true, '켜기']])}</div>
+    </div>
+
+    <div class="quiz-start-row">
+      <button class="btn btn-primary btn-lg" data-action="auto-start">${PLY.play}<span style="margin-left:6px">재생 시작</span></button>
+      <span class="quiz-hint">${hasTTS ? '<kbd>Space</kbd> 재생/정지 · <kbd>←</kbd>/<kbd>→</kbd> 이동' : '⚠ 이 브라우저는 음성 재생을 지원하지 않습니다'}</span>
+    </div>
+  </div>`;
+}
+
+function autoSetupSentenceBody() {
+  const a = S.settings.auto;
+  const bookN = bookmarkList().length, weakN = weakList().length;
+  const srcCard = (key, title, sub, count, disabled) => `
+    <button class="option-card ${a.src === key ? 'active' : ''}" data-action="auto-src" data-src="${key}" ${disabled ? 'disabled' : ''}>
+      <b>${title}</b><span>${sub}</span>${count != null ? `<span class="count">${count}</span>` : ''}
+    </button>`;
+  return `
     <div class="setup-row"><label>재생 범위</label>
       <div class="option-grid">
         ${srcCard('chapter', '챕터', '한 과(20문장)를 순서대로')}
@@ -1108,22 +1149,44 @@ function viewAutoSetup() {
       <div class="select-wrap"><select data-action="auto-ch">
         ${CHAPTERS.map(c => `<option value="${c.id}" ${a.ch === c.id ? 'selected' : ''}>${pad2(c.id)}. ${esc(c.title)} (${c.level})</option>`).join('')}
       </select></div>
+    </div>` : ''}`;
+}
+
+function autoSetupWordBody() {
+  const a = S.settings.auto;
+  const weakN = Object.keys(S.wordWeak).length;
+  if (!a.wcat) a.wcat = GRID_CATS[0] ? GRID_CATS[0].id : '';
+  if (!WORD_LEVELS.includes(a.wlevel)) a.wlevel = WORD_LEVELS[0] || 'N5';
+  const srcCard = (key, title, sub, count, disabled) => `
+    <button class="option-card ${a.wsrc === key ? 'active' : ''}" data-action="auto-wsrc" data-src="${key}" ${disabled ? 'disabled' : ''}>
+      <b>${title}</b><span>${sub}</span>${count != null ? `<span class="count">${count}</span>` : ''}
+    </button>`;
+  return `
+    <div class="setup-row"><label>재생 범위</label>
+      <div class="option-grid">
+        ${srcCard('random', '랜덤 30단어', `전체 ${ALL_WORDS.length}단어에서`)}
+        ${srcCard('level', '레벨 전체', '레벨의 단어를 순서대로')}
+        ${srcCard('cat', '분류 선택', '특정 분류 전체를 순서대로')}
+        ${srcCard('weak', '복습 대기', '틀렸던 단어만', weakN, weakN === 0)}
+      </div>
+    </div>
+
+    ${a.wsrc === 'level' ? `
+    <div class="setup-row"><label>레벨</label>
+      <div class="select-wrap"><select data-action="auto-wlevel">
+        ${WORD_LEVELS.map(lv => `<option value="${lv}" ${a.wlevel === lv ? 'selected' : ''}>${lv} — ${levelWordCount(lv)}단어</option>`).join('')}
+      </select></div>
     </div>` : ''}
 
-    <div class="setup-row"><label>한국어 음성</label>${seg('readKo', [[true, '일본어 + 한국어'], [false, '일본어만']])}</div>
-
-    <div class="setup-grid">
-      <div><label>일본어 반복</label>${seg('repeat', [[1, '1회'], [2, '2회'], [3, '3회']])}</div>
-      <div><label>재생 속도</label>${seg('rate', [[0.7, '느리게'], [0.9, '보통'], [1.1, '빠르게']])}</div>
-      <div><label>문장 간격</label>${seg('gap', [[400, '짧게'], [900, '보통'], [1600, '길게']])}</div>
-      <div><label>Loop</label>${seg('loop', [[false, '끄기'], [true, '켜기']])}</div>
-    </div>
-
-    <div class="quiz-start-row">
-      <button class="btn btn-primary btn-lg" data-action="auto-start">${PLY.play}<span style="margin-left:6px">재생 시작</span></button>
-      <span class="quiz-hint">${hasTTS ? '<kbd>Space</kbd> 재생/정지 · <kbd>←</kbd>/<kbd>→</kbd> 이동' : '⚠ 이 브라우저는 음성 재생을 지원하지 않습니다'}</span>
-    </div>
-  </div>`;
+    ${a.wsrc === 'cat' ? `
+    <div class="setup-row"><label>분류</label>
+      <div class="select-wrap"><select data-action="auto-wcat">
+        ${WORD_LEVELS.map(lv => {
+          const cats = GRID_CATS.filter(c => (c.level || '기초') === lv);
+          return cats.length ? `<optgroup label="${lv}">${cats.map(c => `<option value="${esc(c.id)}" ${a.wcat === c.id ? 'selected' : ''}>${esc(c.title)} (${c.items.length})</option>`).join('')}</optgroup>` : '';
+        }).join('')}
+      </select></div>
+    </div>` : ''}`;
 }
 
 function autoCardBody(s) {
@@ -1137,9 +1200,24 @@ function autoCardBody(s) {
     <p class="auto-ko" id="auto-ko">${esc(s.ko)}</p>`;
 }
 
+function autoWordCardBody(w) {
+  return `
+    <div class="auto-card-top">
+      ${w.level ? levelChip(w.level) : ''}
+      <span class="auto-chapter">${esc(w.cat || '')}</span>
+    </div>
+    <p class="auto-jp jp auto-word" id="auto-jp">${esc(w.disp)}</p>
+    ${w.disp !== w.read ? `<p class="auto-read jp" id="auto-read">${esc(w.read)}</p>` : ''}
+    <p class="auto-ko" id="auto-ko">${esc(w.ko)}</p>`;
+}
+
+// 현재 자동 재생 항목의 카드 본문(코스/단어 공용)
+function autoBody(A) {
+  return A.kind === 'word' ? autoWordCardBody(A.items[A.idx]) : autoCardBody(sentence(A.items[A.idx]));
+}
+
 function viewAutoRun() {
   const A = autoPlayer;
-  const s = sentence(A.items[A.idx]);
   return `
   <div class="view auto-run">
     <div class="quiz-top">
@@ -1148,7 +1226,7 @@ function viewAutoRun() {
       <span class="q-count" id="auto-count">1 / ${A.items.length}</span>
     </div>
 
-    <section class="card auto-card" id="auto-card-body">${autoCardBody(s)}</section>
+    <section class="card auto-card" id="auto-card-body">${autoBody(A)}</section>
 
     <div class="auto-controls">
       <button class="auto-ctrl" data-action="auto-prev" aria-label="이전 문장">${PLY.prev}</button>
@@ -1158,7 +1236,7 @@ function viewAutoRun() {
 
     <div class="auto-live">
       <button id="auto-rate-btn" data-action="auto-live" data-key="rate">${A.rate}×</button>
-      <button id="auto-ko-btn" class="${A.readKo ? 'on' : ''}" data-action="auto-live" data-key="readKo">한국어 음성</button>
+      <button id="auto-ko-btn" class="${A.readKo ? 'on' : ''}" data-action="auto-live" data-key="readKo">${A.kind === 'word' ? '뜻 음성' : '한국어 음성'}</button>
       <button id="auto-loop-btn" class="${A.loop ? 'on' : ''}" data-action="auto-live" data-key="loop">Loop</button>
     </div>
     <p class="quiz-kbd"><kbd>Space</kbd> 재생/정지 · <kbd>←</kbd> 이전 · <kbd>→</kbd> 다음</p>
@@ -1180,8 +1258,7 @@ function updateAutoControls() {
 
 function updateAutoUI() {
   const A = autoPlayer; if (!A) return;
-  const s = sentence(A.items[A.idx]);
-  const body = $('#auto-card-body'); if (body) body.innerHTML = autoCardBody(s);
+  const body = $('#auto-card-body'); if (body) body.innerHTML = autoBody(A);
   const bar = $('#auto-bar'); if (bar) bar.style.width = ((A.idx + (A.finished ? 1 : 0)) / A.items.length * 100) + '%';
   const cnt = $('#auto-count'); if (cnt) cnt.textContent = A.finished ? `${A.items.length} / ${A.items.length} · 완료` : `${A.idx + 1} / ${A.items.length}`;
   const pb = $('#auto-play-btn'); if (pb) pb.innerHTML = A.finished ? PLY.replay : (A.playing ? PLY.pause : PLY.play);
@@ -1194,12 +1271,15 @@ async function autoRun() {
   A.playing = true; A.finished = false;
   updateAutoUI();
   const alive = () => A === autoPlayer && A.playing && myToken === autoToken;
+  const isWord = A.kind === 'word';
   while (alive() && A.idx < A.items.length) {
-    const n = A.items[A.idx], s = sentence(n);
+    const item = A.items[A.idx];
+    const jpText = isWord ? item.read : sentence(item).jp;
+    const koText = isWord ? item.ko : sentence(item).ko;
     for (let r = 0; r < A.repeat; r++) {
       if (!alive()) return;
       setAutoSpeaking('jp');
-      await speakAsync(s.jp, 'ja-JP', A.rate);
+      await speakAsync(jpText, 'ja-JP', A.rate);
       if (!alive()) return;
       if (r < A.repeat - 1) await sleep(260);
     }
@@ -1208,12 +1288,13 @@ async function autoRun() {
       await sleep(300);
       if (!alive()) return;
       setAutoSpeaking('ko');
-      await speakAsync(s.ko, 'ko-KR', A.rate);
+      await speakAsync(koText, 'ko-KR', A.rate);
     }
     if (!alive()) return;
     setAutoSpeaking(null);
-    if (!P.learned[n]) P.learned[n] = 1;
-    touchActivity(n); save();
+    if (isWord) { if (!S.wordLearned[item.key]) S.wordLearned[item.key] = 1; touchActivity(); }
+    else { if (!P.learned[item]) P.learned[item] = 1; touchActivity(item); }
+    save();
     await sleep(A.gap);
     if (!alive()) return;
     if (A.idx + 1 >= A.items.length) {
@@ -1252,9 +1333,11 @@ function autoStop() {
 }
 function startAuto() {
   const cfg = S.settings.auto;
-  const items = autoPool(cfg.src, cfg.ch);
-  if (!items.length) { toast('재생할 문장이 없어요'); return; }
+  const isWord = cfg.kind === 'word';
+  const items = isWord ? autoWordPool() : autoPool(cfg.src, cfg.ch);
+  if (!items.length) { toast(isWord ? '재생할 단어가 없어요' : '재생할 문장이 없어요'); return; }
   autoPlayer = {
+    kind: isWord ? 'word' : 'sentence',
     items, idx: 0, playing: false, finished: false, started: false,
     readKo: cfg.readKo, repeat: cfg.repeat, rate: cfg.rate, gap: cfg.gap, loop: cfg.loop,
   };
@@ -1849,7 +1932,9 @@ document.addEventListener('click', e => {
     }
     case 'q-retry-same': startQuiz(); break;
 
+    case 'auto-kind': if (S.settings.auto.kind !== t.dataset.kind) { S.settings.auto.kind = t.dataset.kind; save(); render(); } break;
     case 'auto-src': S.settings.auto.src = t.dataset.src; save(); render(); break;
+    case 'auto-wsrc': S.settings.auto.wsrc = t.dataset.src; save(); render(); break;
     case 'auto-set': {
       let v = t.dataset.val;
       v = v === 'true' ? true : v === 'false' ? false : Number(v);
@@ -1857,7 +1942,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'auto-start': startAuto(); break;
-    case 'auto-quick': S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
+    case 'auto-quick': S.settings.auto.kind = 'sentence'; S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
     case 'say': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
     case 'word-say': { e.stopPropagation(); speak(t.dataset.ch, t); t.classList.add('revealed'); touchActivity(); break; }
     case 'words-hide': {
@@ -1925,6 +2010,10 @@ document.addEventListener('change', e => {
   if (wc) { quizSetup.wcat = wc.value; }
   const a = e.target.closest('[data-action="auto-ch"]');
   if (a) { S.settings.auto.ch = Number(a.value); save(); }
+  const al = e.target.closest('[data-action="auto-wlevel"]');
+  if (al) { S.settings.auto.wlevel = al.value; save(); }
+  const ac = e.target.closest('[data-action="auto-wcat"]');
+  if (ac) { S.settings.auto.wcat = ac.value; save(); }
   const v = e.target.closest('[data-action="set-voice"]');
   if (v) {
     S.settings.voiceJa = v.value; save(); pickVoice();
