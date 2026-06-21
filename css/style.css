@@ -555,6 +555,11 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 .flip-face .q-num { position: absolute; top: 16px; left: 20px; font-family: var(--font-jp); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
 .flip-face .q-pt { position: absolute; top: 14px; right: 16px; }
 .flip-face .tap-hint { position: absolute; bottom: 16px; font-size: 11.5px; color: var(--muted); letter-spacing: .05em; }
+.flip-face .q-main.wq-word { font-size: clamp(30px, 7vw, 46px); font-weight: 700; line-height: 1.4; }
+.flip-face .q-read { font-family: var(--font-jp); font-size: clamp(17px, 3.6vw, 21px); color: var(--accent); font-weight: 600; letter-spacing: .02em; margin-top: -4px; }
+
+/* 암기 대상 전환(문장/단어) */
+.quiz-kind { margin: 18px 0 4px; }
 
 .quiz-actions { display: flex; gap: 12px; margin-top: 20px; }
 .quiz-actions .btn { flex: 1; padding: 15px; font-size: 16px; border-radius: 14px; }

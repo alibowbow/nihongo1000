@@ -54,6 +54,8 @@ const defaultState = () => ({
   courses: {},                 // courseId -> 진도
   currentCourse: COURSES[0].id,
   streak: { last: '', count: 0 }, // 연속 학습일은 코스 공통
+  wordLearned: {},             // 단어 암기: key(표기|읽기) -> 1  (코스 공통)
+  wordWeak: {},                // 단어 복습 대기: key -> 틀린 횟수 (코스 공통)
   settings: {
     theme: 'auto', scale: 1, hideMode: 'all', kanaScript: 'hira', voiceJa: '', pitch: 1,
     auto: { src: 'chapter', ch: 1, readKo: true, repeat: 1, rate: 0.9, gap: 900, loop: false },
@@ -82,6 +84,8 @@ try {
 // 사용 가능한 모든 코스에 진도 버킷을 보장
 COURSES.forEach(c => { if (!S.courses[c.id]) S.courses[c.id] = emptyProgress(); });
 if (!COURSES.some(c => c.id === S.currentCourse)) S.currentCourse = COURSES[0].id;
+if (!S.wordLearned) S.wordLearned = {};
+if (!S.wordWeak) S.wordWeak = {};
 
 let P; // 현재 코스의 진도 (learned/bookmarks/weak/today/lastChapter)
 function setCourse(id) {
@@ -749,7 +753,8 @@ function viewAll() {
 }
 
 /* ---------- 뷰: 암기 설정 ---------- */
-let quizSetup = { src: 'random', ch: 1, dir: 'jp2ko', shuffle: true };
+let quizSetup = { kind: 'sentence', src: 'random', ch: 1, dir: 'jp2ko', shuffle: true,
+                  wsrc: 'random', wlevel: 'N5', wcat: '' };  // wlevel/wcat은 setup 렌더 시 보정
 let quizSession = null;
 
 function poolFor(src, ch) {
@@ -760,6 +765,24 @@ function poolFor(src, ch) {
 }
 
 function viewQuizSetup() {
+  const k = quizSetup.kind === 'word' ? 'word' : 'sentence';
+  return `
+  <div class="view quiz-setup">
+    <h1 class="page-title">암기 모드 — 暗記</h1>
+    <p class="page-sub">${k === 'word'
+      ? '카드를 뒤집어 단어의 읽기·뜻을 확인하고, 스스로 채점하세요. ‘몰라요’한 단어는 복습 대기로 모입니다.'
+      : '카드를 뒤집어 답을 확인하고, 스스로 채점하세요. ‘몰라요’한 문장은 복습 대기로 모입니다.'}</p>
+
+    <div class="seg seg-wide quiz-kind">
+      <button class="${k === 'sentence' ? 'active' : ''}" data-action="q-kind" data-kind="sentence">📖 문장 암기</button>
+      <button class="${k === 'word' ? 'active' : ''}" data-action="q-kind" data-kind="word">🗂️ 단어 암기</button>
+    </div>
+
+    ${k === 'word' ? quizSetupWordBody() : quizSetupSentenceBody()}
+  </div>`;
+}
+
+function quizSetupSentenceBody() {
   const bookN = bookmarkList().length;
   const weakN = weakList().length;
   const q = quizSetup;
@@ -767,12 +790,7 @@ function viewQuizSetup() {
     <button class="option-card ${q.src === key ? 'active' : ''}" data-action="q-src" data-src="${key}" ${disabled ? 'disabled' : ''}>
       <b>${title}</b><span>${sub}</span>${count != null ? `<span class="count">${count}</span>` : ''}
     </button>`;
-
   return `
-  <div class="view quiz-setup">
-    <h1 class="page-title">암기 모드 — 暗記</h1>
-    <p class="page-sub">카드를 뒤집어 답을 확인하고, 스스로 채점하세요. ‘몰라요’한 문장은 복습 대기로 모입니다.</p>
-
     <div class="setup-row"><label>범위 선택</label>
       <div class="option-grid">
         ${srcCard('random', '랜덤 20문장', `전체 ${TOTAL}문장에서 무작위 출제`)}
@@ -804,17 +822,93 @@ function viewQuizSetup() {
     <div class="quiz-start-row">
       <button class="btn btn-primary btn-lg" data-action="q-start">시작하기 ${ICON.arrowR}</button>
       <span class="quiz-hint">카드 탭 = 뒤집기 · <b>O</b> 알아요 / <b>X</b> 몰라요</span>
+    </div>`;
+}
+
+function quizSetupWordBody() {
+  const q = quizSetup;
+  const weakN = Object.keys(S.wordWeak).length;
+  const learnedN = Object.keys(S.wordLearned).length;
+  if (!q.wcat) q.wcat = GRID_CATS[0] ? GRID_CATS[0].id : '';
+  if (!WORD_LEVELS.includes(q.wlevel)) q.wlevel = WORD_LEVELS[0] || 'N5';
+  const srcCard = (key, title, sub, count, disabled) => `
+    <button class="option-card ${q.wsrc === key ? 'active' : ''}" data-action="qw-src" data-src="${key}" ${disabled ? 'disabled' : ''}>
+      <b>${title}</b><span>${sub}</span>${count != null ? `<span class="count">${count}</span>` : ''}
+    </button>`;
+  return `
+    <div class="setup-row"><label>범위 선택</label>
+      <div class="option-grid">
+        ${srcCard('random', '랜덤 20단어', `전체 ${ALL_WORDS.length}단어에서 무작위`)}
+        ${srcCard('level', '레벨 선택', '레벨에서 무작위 20단어')}
+        ${srcCard('cat', '분류 선택', '특정 분류 전체로 연습')}
+        ${srcCard('weak', '복습 대기', '암기에서 틀렸던 단어만 다시', weakN, weakN === 0)}
+      </div>
     </div>
-  </div>`;
+
+    ${q.wsrc === 'level' ? `
+    <div class="setup-row"><label>레벨</label>
+      <div class="select-wrap">
+        <select data-action="qw-level">
+          ${WORD_LEVELS.map(lv => `<option value="${lv}" ${q.wlevel === lv ? 'selected' : ''}>${lv} — ${levelWordCount(lv)}단어</option>`).join('')}
+        </select>
+      </div>
+    </div>` : ''}
+
+    ${q.wsrc === 'cat' ? `
+    <div class="setup-row"><label>분류</label>
+      <div class="select-wrap">
+        <select data-action="qw-cat">
+          ${WORD_LEVELS.map(lv => {
+            const cats = GRID_CATS.filter(c => (c.level || '기초') === lv);
+            return cats.length ? `<optgroup label="${lv}">${cats.map(c => `<option value="${esc(c.id)}" ${q.wcat === c.id ? 'selected' : ''}>${esc(c.title)} (${c.items.length})</option>`).join('')}</optgroup>` : '';
+          }).join('')}
+        </select>
+      </div>
+    </div>` : ''}
+
+    <div class="setup-row"><label>방향</label>
+      <div class="option-grid">
+        <button class="option-card ${q.dir === 'jp2ko' ? 'active' : ''}" data-action="q-dir" data-dir="jp2ko"><b class="jp">日本語 → 한국어</b><span>단어를 보고 읽기·뜻 떠올리기</span></button>
+        <button class="option-card ${q.dir === 'ko2jp' ? 'active' : ''}" data-action="q-dir" data-dir="ko2jp"><b>한국어 → <span class="jp">日本語</span></b><span>뜻을 보고 단어 떠올리기</span></button>
+      </div>
+    </div>
+
+    <div class="quiz-start-row">
+      <button class="btn btn-primary btn-lg" data-action="q-start">시작하기 ${ICON.arrowR}</button>
+      <span class="quiz-hint">익힌 단어 ${learnedN}개 · 카드 탭 = 뒤집기</span>
+    </div>`;
 }
 
 /* ---------- 뷰: 암기 실행 ---------- */
 function startQuiz() {
+  if (quizSetup.kind === 'word') return startWordQuiz();
   let pool = poolFor(quizSetup.src, quizSetup.ch);
   if (!pool.length) { toast('출제할 문장이 없어요'); return; }
   if (quizSetup.shuffle && quizSetup.src !== 'random') pool = shuffle(pool);
   if (pool.length > 50) pool = pool.slice(0, 50); // 한 세션 상한
-  quizSession = { items: pool, idx: 0, dir: quizSetup.dir, flipped: false, wrong: [], right: 0 };
+  quizSession = { kind: 'sentence', items: pool, idx: 0, dir: quizSetup.dir, flipped: false, wrong: [], right: 0 };
+  if (location.hash === '#/quiz/run') render();
+  else location.hash = '#/quiz/run';
+}
+
+function wordPool() {
+  const q = quizSetup;
+  if (q.wsrc === 'cat') {
+    const c = GRID_CATS.find(x => x.id === q.wcat) || GRID_CATS[0];
+    if (!c) return [];
+    return shuffle(c.items.map(it => WORD_INDEX.get(it[0] + '|' + it[1])
+      || { key: it[0] + '|' + it[1], disp: it[0], read: it[1], ko: it[2], level: c.level || '기초', cat: c.title }));
+  }
+  if (q.wsrc === 'level') return shuffle(ALL_WORDS.filter(w => w.level === q.wlevel)).slice(0, 20);
+  if (q.wsrc === 'weak') return Object.keys(S.wordWeak).map(k => WORD_INDEX.get(k)).filter(Boolean);
+  return shuffle(ALL_WORDS).slice(0, 20); // random
+}
+
+function startWordQuiz() {
+  let pool = wordPool();
+  if (!pool.length) { toast('출제할 단어가 없어요'); return; }
+  if (pool.length > 50) pool = pool.slice(0, 50); // 한 세션 상한
+  quizSession = { kind: 'word', items: pool, idx: 0, dir: quizSetup.dir, flipped: false, wrong: [], right: 0 };
   if (location.hash === '#/quiz/run') render();
   else location.hash = '#/quiz/run';
 }
@@ -823,6 +917,7 @@ function viewQuizRun() {
   const qs = quizSession;
   if (!qs) { location.hash = '#/quiz'; return ''; }
   if (qs.idx >= qs.items.length) return viewQuizResult();
+  if (qs.kind === 'word') return viewWordQuizRun(qs);
 
   const s = sentence(qs.items[qs.idx]);
   const jpFront = qs.dir === 'jp2ko';
@@ -863,34 +958,83 @@ function viewQuizRun() {
   </div>`;
 }
 
+function viewWordQuizRun(qs) {
+  const w = qs.items[qs.idx];
+  const jpFront = qs.dir === 'jp2ko';
+  const pct = qs.idx / qs.items.length * 100;
+  const hasRead = w.disp !== w.read;
+  const frontMain = jpFront
+    ? `<div class="q-main jp wq-word">${esc(w.disp)}</div>`
+    : `<div class="q-main ko-main">${esc(w.ko)}</div>`;
+
+  return `
+  <div class="view quiz-run">
+    <div class="quiz-top">
+      <button class="icon-btn" data-action="q-exit" aria-label="그만두기" title="그만두기">${ICON.x}</button>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <span class="q-count">${qs.idx + 1} / ${qs.items.length}</span>
+    </div>
+
+    <div class="flip-scene">
+      <div class="flip-card ${qs.flipped ? 'flipped' : ''}" data-action="q-flip" id="flip-card">
+        <div class="flip-face front">
+          <span class="q-label">${jpFront ? '日 → 韓' : '韓 → 日'}</span>
+          ${frontMain}
+          <span class="tap-hint">카드를 누르면 읽기·뜻이 보여요</span>
+        </div>
+        <div class="flip-face back">
+          ${w.level ? `<span class="q-pt">${levelChip(w.level)}</span>` : ''}
+          <div class="q-main jp wq-word">${esc(w.disp)}</div>
+          ${hasRead ? `<div class="q-read jp">${esc(w.read)}</div>` : ''}
+          <div class="q-sub">${esc(w.ko)}</div>
+          <button class="s-btn" data-action="say" data-ch="${esc(w.read)}">${ICON.play} 듣기</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="quiz-actions" style="visibility:${qs.flipped ? 'visible' : 'hidden'}">
+      <button class="btn btn-no" data-action="q-no">✕ 몰라요</button>
+      <button class="btn btn-ok" data-action="q-ok">◯ 알아요</button>
+    </div>
+    <p class="quiz-kbd"><kbd>Space</kbd> 뒤집기 · <kbd>←</kbd>/<kbd>X</kbd> 몰라요 · <kbd>→</kbd>/<kbd>O</kbd> 알아요</p>
+  </div>`;
+}
+
 function viewQuizResult() {
   const qs = quizSession;
+  const isWord = qs.kind === 'word';
+  const unit = isWord ? '단어' : '문장';
   const total = qs.items.length;
   const right = qs.right;
   const pct = total ? right / total : 0;
-  const wrongs = qs.wrong.map(sentence);
   const cheer = pct === 1 ? '完璧！ 완벽해요' : pct >= 0.8 ? 'よくできました — 잘했어요' : pct >= 0.5 ? 'もう一歩 — 조금만 더' : '大丈夫、반복이 답입니다';
+  const wrongN = qs.wrong.length;
+  const wrongList = isWord
+    ? qs.wrong.map(w => `
+          <div class="wrong-item">
+            ${w.level ? `<div style="margin-bottom:4px">${levelChip(w.level)}</div>` : ''}
+            <div class="jp">${esc(w.disp)}${w.disp !== w.read ? ` <small class="jp">（${esc(w.read)}）</small>` : ''}</div>
+            <div class="ko">${esc(w.ko)}</div>
+          </div>`).join('')
+    : qs.wrong.map(sentence).map(s => `
+          <div class="wrong-item">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span class="s-num jp">${pad4(s.n)}</span>${ptChip(s.pt)}</div>
+            <div class="jp">${esc(s.jp)}</div>
+            <div class="ko">${esc(s.ko)}</div>
+          </div>`).join('');
 
   return `
   <div class="view quiz-run">
     <section class="card quiz-result">
       ${ringSvg(pct, 120, 8, '정답률')}
       <h2>${cheer}</h2>
-      <p class="sub">${total}문장 중 <b>${right}문장</b>을 알고 있었어요${wrongs.length ? ` · ${wrongs.length}문장은 복습 대기에 담았어요` : ''}</p>
+      <p class="sub">${total}${unit} 중 <b>${right}${unit}</b>를 알고 있었어요${wrongN ? ` · ${wrongN}${unit}는 복습 대기에 담았어요` : ''}</p>
       <div class="result-actions">
-        ${wrongs.length ? `<button class="btn btn-primary" data-action="q-retry-wrong">틀린 ${wrongs.length}문장 다시</button>` : ''}
+        ${wrongN ? `<button class="btn btn-primary" data-action="q-retry-wrong">틀린 ${wrongN}${unit} 다시</button>` : ''}
         <button class="btn btn-ghost" data-action="q-retry-same">한 번 더</button>
         <a class="btn btn-ghost" href="#/quiz">설정으로</a>
       </div>
-      ${wrongs.length ? `
-      <div class="wrong-list">
-        ${wrongs.map(s => `
-          <div class="wrong-item">
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span class="s-num jp">${pad4(s.n)}</span>${ptChip(s.pt)}</div>
-            <div class="jp">${esc(s.jp)}</div>
-            <div class="ko">${esc(s.ko)}</div>
-          </div>`).join('')}
-      </div>` : ''}
+      ${wrongN ? `<div class="wrong-list">${wrongList}</div>` : ''}
     </section>
   </div>`;
 }
@@ -898,6 +1042,16 @@ function viewQuizResult() {
 function answerQuiz(ok) {
   const qs = quizSession;
   if (!qs || !qs.flipped) return;
+  if (qs.kind === 'word') {
+    const w = qs.items[qs.idx];
+    if (ok) { qs.right++; S.wordLearned[w.key] = 1; delete S.wordWeak[w.key]; }
+    else { qs.wrong.push(w); S.wordWeak[w.key] = (S.wordWeak[w.key] || 0) + 1; }
+    touchActivity();        // 연속 학습일 유지 (문장 통계는 건드리지 않음)
+    qs.idx++;
+    qs.flipped = false;
+    render();
+    return;
+  }
   const n = qs.items[qs.idx];
   if (ok) {
     qs.right++;
@@ -1238,6 +1392,23 @@ function viewKanaChart() {
 
 /* ---------- 단어장(語彙) ---------- */
 const WORDS = window.NIHONGO_WORDS || [];
+
+/* 단어 암기용 평탄 색인 — 그리드(뜻 있는) 분류만 사용, 활용표 등 table형 제외 */
+const WORD_LEVELS_ALL = ['기초', 'N5', 'N4', 'N3', 'N2', 'N1'];
+const GRID_CATS = WORDS.filter(c => c.type !== 'table' && Array.isArray(c.items) && c.items.length);
+const ALL_WORDS = [];
+const WORD_INDEX = new Map();          // key -> 단어 객체
+for (const c of GRID_CATS) {
+  const lv = c.level || '기초';
+  for (const it of c.items) {
+    const w = { key: it[0] + '|' + it[1], disp: it[0], read: it[1], ko: it[2], level: lv, cat: c.title };
+    ALL_WORDS.push(w);
+    if (!WORD_INDEX.has(w.key)) WORD_INDEX.set(w.key, w);
+  }
+}
+const WORD_LEVELS = WORD_LEVELS_ALL.filter(lv => ALL_WORDS.some(w => w.level === lv));
+const levelWordCount = lv => ALL_WORDS.reduce((n, w) => n + (w.level === lv ? 1 : 0), 0);
+
 let wordsHideKo = false;
 let wordsShowRead = false; // 발음(읽기) 기본 숨김 — 누르면 표시
 let wordsLevel = '기초';   // 단어장 레벨 필터: 전체 / 기초 / N5 / N4 / N3 / N2 / N1
@@ -1652,7 +1823,9 @@ document.addEventListener('click', e => {
       break;
     }
 
+    case 'q-kind': if (quizSetup.kind !== t.dataset.kind) { quizSetup.kind = t.dataset.kind; render(); } break;
     case 'q-src': quizSetup.src = t.dataset.src; render(); break;
+    case 'qw-src': quizSetup.wsrc = t.dataset.src; render(); break;
     case 'q-dir': quizSetup.dir = t.dataset.dir; render(); break;
     case 'q-start': startQuiz(); break;
     case 'q-flip':
@@ -1670,7 +1843,7 @@ document.addEventListener('click', e => {
       break;
     case 'q-retry-wrong': {
       const wrong = quizSession.wrong.slice();
-      quizSession = { items: shuffle(wrong), idx: 0, dir: quizSession.dir, flipped: false, wrong: [], right: 0 };
+      quizSession = { kind: quizSession.kind, items: shuffle(wrong), idx: 0, dir: quizSession.dir, flipped: false, wrong: [], right: 0 };
       render();
       break;
     }
@@ -1746,6 +1919,10 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const t = e.target.closest('[data-action="q-ch"]');
   if (t) { quizSetup.ch = Number(t.value); }
+  const wl = e.target.closest('[data-action="qw-level"]');
+  if (wl) { quizSetup.wlevel = wl.value; }
+  const wc = e.target.closest('[data-action="qw-cat"]');
+  if (wc) { quizSetup.wcat = wc.value; }
   const a = e.target.closest('[data-action="auto-ch"]');
   if (a) { S.settings.auto.ch = Number(a.value); save(); }
   const v = e.target.closest('[data-action="set-voice"]');
