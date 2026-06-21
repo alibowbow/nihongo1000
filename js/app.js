@@ -1240,7 +1240,7 @@ function viewKanaChart() {
 const WORDS = window.NIHONGO_WORDS || [];
 let wordsHideKo = false;
 let wordsShowRead = false; // 발음(읽기) 기본 숨김 — 누르면 표시
-let wordsLevel = '전체';   // 단어장 레벨 필터: 전체 / 기초 / N2 / N1
+let wordsLevel = '기초';   // 단어장 레벨 필터: 전체 / 기초 / N5 / N4 / N3 / N2 / N1
 
 function wordGridItem(it) {
   const [disp, read, ko] = it;
@@ -1276,14 +1276,14 @@ function wordTable(cat) {
 const wordLevel = c => c.level || '기초';
 const wordCount = c => c.items ? c.items.length : (c.rows ? c.rows.length : 0);
 function viewWords() {
-  const levels = ['전체', '기초', 'N2', 'N1'];
-  if (!levels.includes(wordsLevel)) wordsLevel = '전체';
+  const levels = ['전체', '기초', 'N5', 'N4', 'N3', 'N2', 'N1'];
+  if (!levels.includes(wordsLevel)) wordsLevel = '기초';
   const list = WORDS.filter(c => wordsLevel === '전체' || wordLevel(c) === wordsLevel);
   const total = list.reduce((a, c) => a + wordCount(c), 0);
   return `
   <div class="view ${wordsShowRead ? '' : 'read-hidden'} ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
     <h1 class="page-title">단어장 — 語彙</h1>
-    <p class="page-sub">단어를 누르면 발음이 들리고 읽기가 나타납니다. 기초 어휘부터 JLPT N2·N1까지 한자리에서.</p>
+    <p class="page-sub">단어를 누르면 발음이 들리고 읽기가 나타납니다. 기초 어휘부터 JLPT N5~N1까지 한자리에서.</p>
 
     <div class="filter-row">
       ${levels.map(f => `<button class="filter-btn ${wordsLevel === f ? 'active' : ''}" data-action="words-level" data-level="${f}">${f}</button>`).join('')}
