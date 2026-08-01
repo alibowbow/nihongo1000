@@ -1865,7 +1865,16 @@ document.addEventListener('click', e => {
     }
     case 'learn': toggleLearn(Number(t.dataset.n), t); break;
     case 'book': toggleBook(Number(t.dataset.n), t); break;
-    case 'reveal': t.classList.add('revealed'); break;
+    case 'reveal': {
+      t.classList.add('revealed');
+      // 일본어 가림막은 답을 공개하는 동시에 해당 문장을 읽어 준다.
+      if (t.closest('.s-jp, .ar-jp')) {
+        const host = t.closest('[data-n]');
+        const s = host && sentence(Number(host.dataset.n));
+        if (s) speak(s.jp, t);
+      }
+      break;
+    }
     case 'hide-mode': {
       const m = t.dataset.mode;
       S.settings.hideMode = m; save();
