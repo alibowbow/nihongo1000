@@ -1537,7 +1537,7 @@ function viewWords() {
   return `
   <div class="view ${wordsShowRead ? '' : 'read-hidden'} ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
     <h1 class="page-title">단어장 — 語彙</h1>
-    <p class="page-sub">단어를 누르면 발음이 들리고 읽기가 나타납니다. 기초 어휘부터 JLPT N5~N1까지 한자리에서.</p>
+    <p class="page-sub">단어를 누르면 발음을 들을 수 있습니다. 발음과 뜻은 각각 가려 암기 상태를 확인하세요.</p>
 
     <div class="filter-row">
       ${levels.map(f => `<button class="filter-btn ${wordsLevel === f ? 'active' : ''}" data-action="words-level" data-level="${f}">${f}</button>`).join('')}
@@ -1549,8 +1549,8 @@ function viewWords() {
         ${list.map((c, i) => `<button class="word-chip wc-${i % 6}" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
       </div>
       <div class="words-toggles">
-        <button class="btn btn-sm btn-ghost ${wordsShowRead ? 'on' : ''}" data-action="words-read">${wordsShowRead ? '발음 가리기' : '발음 보이기'}</button>
-        <button class="btn btn-sm btn-ghost ${wordsHideKo ? 'on' : ''}" data-action="words-hide">${wordsHideKo ? '뜻 보이기' : '뜻 가리기'}</button>
+        <button class="btn btn-sm btn-ghost ${!wordsShowRead ? 'on' : ''}" data-action="words-read" aria-pressed="${!wordsShowRead}">발음 가리기</button>
+        <button class="btn btn-sm btn-ghost ${wordsHideKo ? 'on' : ''}" data-action="words-hide" aria-pressed="${wordsHideKo}">뜻 가리기</button>
       </div>
     </div>
 
@@ -1949,21 +1949,29 @@ document.addEventListener('click', e => {
     case 'auto-start': startAuto(); break;
     case 'auto-quick': S.settings.auto.kind = 'sentence'; S.settings.auto.src = 'chapter'; S.settings.auto.ch = Number(t.dataset.ch); save(); startAuto(); break;
     case 'say': { e.stopPropagation(); speak(t.dataset.ch, t); break; }
-    case 'word-say': { e.stopPropagation(); speak(t.dataset.ch, t); t.classList.add('revealed'); touchActivity(); break; }
+    case 'word-say': {
+      e.stopPropagation();
+      speak(t.dataset.ch, t);
+      // 발음과 뜻을 모두 가린 암기 모드에서는 클릭해도 시각 정보는 공개하지 않는다.
+      if (!(wordsHideKo && !wordsShowRead)) t.classList.add('revealed');
+      touchActivity();
+      break;
+    }
     case 'words-hide': {
       wordsHideKo = !wordsHideKo;
       const root = $('#words-root'); if (root) root.classList.toggle('words-hide', wordsHideKo);
       t.classList.toggle('on', wordsHideKo);
-      t.textContent = wordsHideKo ? '뜻 보이기' : '뜻 가리기';
+      t.setAttribute('aria-pressed', String(wordsHideKo));
       // 토글할 때마다 공개 상태 초기화 (켜면 전부 가려지고, 끄면 깔끔하게)
       $$('.word-item.revealed, .wt-cell.revealed').forEach(el => el.classList.remove('revealed'));
       break;
     }
     case 'words-read': {
       wordsShowRead = !wordsShowRead;
-      const root = $('#words-root'); if (root) root.classList.toggle('read-hidden', !wordsShowRead);
-      t.classList.toggle('on', wordsShowRead);
-      t.textContent = wordsShowRead ? '발음 가리기' : '발음 보이기';
+      const hideRead = !wordsShowRead;
+      const root = $('#words-root'); if (root) root.classList.toggle('read-hidden', hideRead);
+      t.classList.toggle('on', hideRead);
+      t.setAttribute('aria-pressed', String(hideRead));
       $$('.word-item.revealed, .wt-cell.revealed').forEach(el => el.classList.remove('revealed'));
       break;
     }
