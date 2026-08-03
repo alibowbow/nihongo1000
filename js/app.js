@@ -612,7 +612,7 @@ function lessonHtml(ch) {
 /* ---------- 뷰: 학습 ---------- */
 function maskWrap(inner, masked) {
   return masked
-    ? `<span class="masked" data-action="reveal"><span class="mask-text">${inner}</span></span>`
+    ? `<span class="masked"><span class="mask-text">${inner}</span><button class="mask-reveal" type="button" data-action="reveal" aria-label="가린 내용 보기">눌러서 보기</button></span>`
     : inner;
 }
 
@@ -626,7 +626,7 @@ function sentenceCard(s) {
       <span class="s-num jp">${pad4(s.n)}</span>
       ${ptChip(s.pt)}
     </div>
-    <p class="s-jp jp">${maskWrap(esc(s.jp), mode === 'hideJp')}</p>
+    <p class="s-jp jp" data-action="speak" data-n="${s.n}" title="발음 듣기">${maskWrap(esc(s.jp), mode === 'hideJp')}</p>
     <p class="s-ko">${maskWrap(esc(s.ko), mode === 'hideKo')}</p>
     <div class="s-actions">
       <button class="s-btn" data-action="speak" data-n="${s.n}" title="발음 듣기">${ICON.play} 듣기</button>
@@ -1866,13 +1866,9 @@ document.addEventListener('click', e => {
     case 'learn': toggleLearn(Number(t.dataset.n), t); break;
     case 'book': toggleBook(Number(t.dataset.n), t); break;
     case 'reveal': {
-      t.classList.add('revealed');
-      // 일본어 가림막은 답을 공개하는 동시에 해당 문장을 읽어 준다.
-      if (t.closest('.s-jp, .ar-jp')) {
-        const host = t.closest('[data-n]');
-        const s = host && sentence(Number(host.dataset.n));
-        if (s) speak(s.jp, t);
-      }
+      e.stopPropagation();
+      const masked = t.closest('.masked');
+      if (masked) masked.classList.add('revealed');
       break;
     }
     case 'hide-mode': {

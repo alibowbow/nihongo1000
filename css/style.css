@@ -445,19 +445,21 @@ mark { background: color-mix(in srgb, var(--gold) 30%, transparent); color: inhe
 }
 .s-ko { margin: 0; color: var(--ink-soft); font-size: calc(14.5px * var(--scale)); line-height: 1.65; overflow-wrap: anywhere; }
 
-.masked { position: relative; cursor: pointer; display: block; }
+.s-jp[data-action="speak"] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.s-jp[data-action="speak"].speaking { color: var(--accent-deep); }
+.masked { position: relative; display: block; }
 .masked > .mask-text { filter: blur(7px); opacity: .55; transition: filter .25s, opacity .25s; user-select: none; }
-.masked::after {
-  content: "눌러서 보기";
+.mask-reveal {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   font-family: var(--font-ui); font-size: 11px; font-weight: 700; letter-spacing: .08em;
   color: var(--muted); background: var(--surface);
   border: 1px solid var(--line-strong); border-radius: 99px; padding: 3px 10px;
-  opacity: .92; pointer-events: none;
+  opacity: .92; cursor: pointer; white-space: nowrap;
 }
+.mask-reveal:hover { color: var(--ink); border-color: var(--muted); }
+.mask-reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .masked.revealed > .mask-text { filter: none; opacity: 1; user-select: auto; }
-.masked.revealed::after { display: none; }
-.masked.revealed { cursor: default; }
+.masked.revealed > .mask-reveal { display: none; }
 
 .s-actions { display: flex; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .s-btn {
