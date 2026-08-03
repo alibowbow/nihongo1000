@@ -1952,8 +1952,8 @@ document.addEventListener('click', e => {
     case 'word-say': {
       e.stopPropagation();
       speak(t.dataset.ch, t);
-      // 발음과 뜻을 모두 가린 암기 모드에서는 클릭해도 시각 정보는 공개하지 않는다.
-      if (!(wordsHideKo && !wordsShowRead)) t.classList.add('revealed');
+      // 발음이나 뜻 중 하나라도 가린 상태에서는 클릭해도 시각 정보는 공개하지 않는다.
+      if (!wordsHideKo && wordsShowRead) t.classList.add('revealed');
       touchActivity();
       break;
     }
