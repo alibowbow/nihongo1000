@@ -1080,6 +1080,11 @@ function viewAutoSetup() {
       <button class="${k === 'word' ? 'active' : ''}" data-action="auto-kind" data-kind="word">🗂️ 단어 듣기</button>
     </div>
 
+    <div class="quiz-start-row">
+      <button class="btn btn-primary btn-lg" data-action="auto-start">${PLY.play}<span style="margin-left:6px">재생 시작</span></button>
+      <span class="quiz-hint">${hasTTS ? '<kbd>Space</kbd> 재생/정지 · <kbd>←</kbd>/<kbd>→</kbd> 이동' : '⚠ 이 브라우저는 음성 재생을 지원하지 않습니다'}</span>
+    </div>
+
     ${k === 'word' ? autoSetupWordBody() : autoSetupSentenceBody()}
 
     <div class="setup-row"><label>${k === 'word' ? '뜻 음성' : '한국어 음성'}</label>${seg('readKo', [[true, k === 'word' ? '일본어 + 뜻' : '일본어 + 한국어'], [false, '일본어만']])}</div>
@@ -1091,10 +1096,7 @@ function viewAutoSetup() {
       <div><label>Loop</label>${seg('loop', [[false, '끄기'], [true, '켜기']])}</div>
     </div>
 
-    <div class="quiz-start-row">
-      <button class="btn btn-primary btn-lg" data-action="auto-start">${PLY.play}<span style="margin-left:6px">재생 시작</span></button>
-      <span class="quiz-hint">${hasTTS ? '<kbd>Space</kbd> 재생/정지 · <kbd>←</kbd>/<kbd>→</kbd> 이동' : '⚠ 이 브라우저는 음성 재생을 지원하지 않습니다'}</span>
-    </div>
+
   </div>`;
 }
 
@@ -1403,11 +1405,20 @@ function viewKanaPractice() {
     </div>`;
 }
 
+function vocabTabs(active) {
+  return `
+    <div class="seg seg-wide quiz-kind" role="tablist" aria-label="단어 학습 전환">
+      <button class="${active === 'words' ? 'active' : ''}" data-action="vocab-tab" data-tab="words" role="tab" aria-selected="${active === 'words'}">단어장</button>
+      <button class="${active === 'kana' ? 'active' : ''}" data-action="vocab-tab" data-tab="kana" role="tab" aria-selected="${active === 'kana'}">가나</button>
+    </div>`;
+}
 function viewKana() {
   return `
   <div class="view">
     <h1 class="page-title">가나 익히기 — 五十音</h1>
     <p class="page-sub">문장 학습 전 첫걸음. 차트로 눈에 익힌 뒤, 랜덤 연습에서 발음을 가리고 떠올려 보세요.</p>
+
+    ${vocabTabs('kana')}
 
     <div class="filter-row">
       <div class="seg" role="group" aria-label="모드 전환" style="margin-right:auto">
@@ -1509,6 +1520,8 @@ function viewWords() {
   <div class="view ${wordsShowRead ? '' : 'read-hidden'} ${wordsHideKo ? 'words-hide' : ''}" id="words-root">
     <h1 class="page-title">단어장 — 語彙</h1>
     <p class="page-sub">단어를 누르면 발음을 들을 수 있습니다. 발음과 뜻은 각각 가려 암기 상태를 확인하세요.</p>
+
+    ${vocabTabs('words')}
 
     <div class="filter-row">
       ${levels.map(f => `<button class="filter-btn ${wordsLevel === f ? 'active' : ''}" data-action="words-level" data-level="${f}">${f}</button>`).join('')}
@@ -1818,7 +1831,7 @@ function render() {
     }
     html = viewAutoSetup(); nav = 'auto';
   }
-  else if (page === 'kana') { html = viewKana(); nav = 'kana'; }
+  else if (page === 'kana') { html = viewKana(); nav = 'words'; }
   else if (page === 'words') {
     const level = params.get('level');
     if (level && ['전체', ...WORD_LEVELS_ALL].includes(level)) wordsLevel = level;
@@ -2076,6 +2089,7 @@ document.addEventListener('click', e => {
       touchActivity();
       break;
     }
+    case 'vocab-tab': location.hash = '#/' + t.dataset.tab; break;
     case 'words-hide': {
       wordsHideKo = !wordsHideKo;
       const root = $('#words-root'); if (root) root.classList.toggle('words-hide', wordsHideKo);
