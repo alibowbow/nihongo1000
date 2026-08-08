@@ -361,6 +361,10 @@ function viewHome() {
   const fresh = total === 0;
   const allDone = total === TOTAL;
   const course = courseMeta(S.currentCourse);
+  // 날짜가 바뀌기 전까지 같은 문장을 보여 주는 오늘의 문장
+  const dayIdx = Math.floor(Date.now() / 86400000) % TOTAL;
+  const tod = SENTENCES[dayIdx];
+  const todCh = chapterOf(tod.ch);
   const weakN = weakList().length;
   const bookN = bookmarkList().length;
 
@@ -385,6 +389,23 @@ function viewHome() {
     <section class="card home-glance" aria-label="학습 현황">
       <a href="#/quiz?src=weak"><small>복습 대기</small><b>${weakN}문장</b></a>
       <a href="#/quiz?src=book"><small>북마크</small><b>${bookN}문장</b></a>
+    </section>
+
+    <div class="section-head">
+      <h2>오늘의 문장</h2>
+      <a href="#/study/${tod.ch}?focus=${tod.n}">본문에서 보기</a>
+    </div>
+    <section class="s-card" aria-label="오늘의 문장">
+      <div class="s-top">
+        <span class="s-num jp">${pad4(tod.n)}</span>
+        ${levelChip(todCh.level)}
+        ${ptChip(tod.pt)}
+      </div>
+      <p class="s-jp jp" data-action="speak" data-n="${tod.n}" title="눌러서 듣기">${esc(tod.jp)}</p>
+      <p class="s-ko">${esc(tod.ko)}</p>
+      <div class="s-actions">
+        <button class="s-btn" type="button" data-action="speak" data-n="${tod.n}" aria-label="오늘의 문장 일본어 발음 듣기">${ICON.play} 듣기</button>
+      </div>
     </section>
   </div>`;
 }
