@@ -105,7 +105,6 @@ setCourse(S.currentCourse);
 function courseSwitchHtml() {
   if (COURSES.length < 2) return '';
   return `
-  <div class="course-switch-head"><h2>학습 코스</h2><small>레벨에 맞춰 골라 학습하세요</small></div>
   <section class="course-switch" role="group" aria-label="학습 코스 선택">
     ${COURSES.map(c => {
       const prog = S.courses[c.id] || { learned: {} };
@@ -120,16 +119,28 @@ function courseSwitchHtml() {
     }).join('')}
   </section>`;
 }
+
+function updateCourseControl() {
+  const meta = courseMeta(S.currentCourse);
+  const label = document.getElementById('current-course-label');
+  const pill = document.querySelector('.course-pill');
+  if (label) label.textContent = meta.label;
+  if (pill) {
+    pill.setAttribute('aria-label', `현재 ${meta.label} 코스 · 코스 선택`);
+    pill.title = `현재 ${meta.label} 코스 · 코스 선택`;
+  }
+}
+
 function switchCourse(id) {
-  if (id === S.currentCourse || !COURSES.some(c => c.id === id)) return;
+  if (!COURSES.some(c => c.id === id)) return;
+  if (id === S.currentCourse) { closeModal(); return; }
   if (autoPlayer) autoStop();
   setCourse(id);
-  // 코스 경계를 넘는 임시 상태 초기화
   chapterFilter = 'ALL'; allFilter = 'ALL';
   quizSetup.ch = 1; quizSession = null;
   S.settings.auto.ch = 1;
   save();
-  location.hash = '#/';
+  closeModal();
   render();
   toast(`${courseMeta(id).label} 코스로 전환했어요`);
 }
@@ -369,7 +380,6 @@ function viewHome() {
 
   return `
   <div class="view">
-    ${courseSwitchHtml()}
     <section class="card hero">
       <div class="hero-grid">
         <div>
@@ -424,34 +434,15 @@ function viewHome() {
         </div>`).join('')}
     </section>
 
-    <div class="section-head"><h2>바로 가기</h2></div>
-    <div class="option-grid">
-      <a class="option-card" href="#/kana">
-        <b>가나 익히기 — <span class="jp">五十音</span></b><span>히라가나·카타카나 차트와 랜덤 연습</span>
-      </a>
-      <a class="option-card" href="#/words">
-        <b>단어장 — <span class="jp">語彙</span></b><span>숫자·조수사·요일·계절·가족 등 주제별 단어</span>
-      </a>
-      <a class="option-card" href="#/auto">
-        <b>자동 학습 — <span class="jp">自動再生</span></b><span>듣기만 해도 되는 핸즈프리 음성 재생</span>
-      </a>
-      <a class="option-card" href="#/quiz?src=random">
-        <b>랜덤 20문장 암기</b><span>전체 범위에서 무작위로 카드 테스트</span>
-      </a>
-      <a class="option-card" href="#/quiz?src=book">
-        <b>북마크 복습</b><span>따로 모아 둔 ${bookN}개 문장 다시 보기</span>
-        ${bookN ? `<span class="count">${bookN}</span>` : ''}
-      </a>
-      <a class="option-card" href="#/chapters?tab=grammar">
-        <b>문법 색인 — <span class="jp">文法</span></b><span>${CHAPTERS.length}개 핵심 문형 해설을 한눈에</span>
-      </a>
-      <a class="option-card" href="#/all">
-        <b>천문장 — <span class="jp">全文</span></b><span>${TOTAL}문장을 한 화면에서 통독</span>
-      </a>
-      <a class="option-card" href="#/study/${resume.id}">
-        <b>오늘의 20문장</b><span>${pad2(resume.id)}과 「${esc(resume.title)}」 이어가기</span>
-      </a>
-    </div>
+    <div class="section-head"><h2>빠른 탐색</h2></div>
+    <a class="explore-cta card" href="#/search">
+      <span class="explore-cta-mark jp">探</span>
+      <span>
+        <b>문장·문법·단어를 한곳에서 찾기</b>
+        <small>천문장, 문법 색인, 단어장, 가나까지 탐색 메뉴에 모았습니다.</small>
+      </span>
+      <span class="explore-arrow" aria-hidden="true">→</span>
+    </a>
   </div>`;
 }
 
@@ -465,23 +456,29 @@ function viewChapters() {
   const resumeId = resumeChapter().id;
   return `
   <div class="view">
-    ${courseSwitchHtml()}
     <h1 class="page-title">목차 — 五十課</h1>
     <p class="page-sub">핵심 문형 ${CHAPTERS.length}과, 과마다 20문장. 순서대로 읽어도 좋고 필요한 문형만 골라도 좋습니다.</p>
-    <div class="filter-row">
-      <div class="seg" role="group" aria-label="보기 전환" style="margin-right:auto">
+    <div class="catalog-toolbar">
+      <div class="seg" role="group" aria-label="보기 전환">
         <button class="${chaptersTab === 'list' ? 'active' : ''}" data-action="ch-tab" data-tab="list">과 목록</button>
         <button class="${chaptersTab === 'grammar' ? 'active' : ''}" data-action="ch-tab" data-tab="grammar">문법 색인</button>
       </div>
-      ${filters.map(f => `<button class="filter-btn ${chapterFilter === f ? 'active' : ''}" data-action="filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
+      <div class="filter-row compact" aria-label="급수 필터">
+        ${filters.map(f => `<button class="filter-btn ${chapterFilter === f ? 'active' : ''}" data-action="filter" data-filter="${f}">${f === 'ALL' ? '전체' : f}</button>`).join('')}
+      </div>
     </div>
+    <label class="catalog-search" for="chapter-search">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="chapter-search" type="search" placeholder="과 번호·문형·설명 검색" autocomplete="off">
+      <span id="chapter-search-count">${list.length}개</span>
+    </label>
     ${chaptersTab === 'grammar' ? `
     <div class="chapter-list">
       ${list.map(ch => {
         const g = GRAMMAR.find(x => x.id === ch.id);
         if (!g) return '';
         return `
-        <a class="chapter-item gi-item" href="#/grammar/${ch.id}">
+        <a class="chapter-item gi-item" data-search="${esc(`${pad2(ch.id)} ${g.formula} ${g.gist} ${ch.level}`.toLowerCase())}" href="#/grammar/${ch.id}">
           <span class="chapter-num">${pad2(ch.id)}</span>
           <span class="chapter-body">
             <h3 class="jp gi-formula">${esc(g.formula)}</h3>
@@ -498,7 +495,7 @@ function viewChapters() {
         const done = p.done === p.total;
         const isResume = !done && ch.id === resumeId && p.done > 0;
         return `
-        <a class="chapter-item ${done ? 'done' : ''} ${isResume ? 'resume' : ''}" href="#/study/${ch.id}">
+        <a class="chapter-item ${done ? 'done' : ''} ${isResume ? 'resume' : ''}" data-search="${esc(`${pad2(ch.id)} ${ch.title} ${ch.level}`.toLowerCase())}" href="#/study/${ch.id}">
           <span class="chapter-num">${pad2(ch.id)}</span>
           <span class="chapter-body">
             <h3>${esc(ch.title)}${isResume ? '<span class="resume-tag">이어서</span>' : ''}</h3>
@@ -511,6 +508,7 @@ function viewChapters() {
         </a>`;
       }).join('')}
     </div>`}
+    <div id="chapter-no-results" class="empty compact-empty" hidden><span class="jp">無</span>일치하는 과나 문형이 없습니다.</div>
   </div>`;
 }
 
@@ -661,11 +659,16 @@ function viewStudy(id) {
       </div>
     </section>
 
-    ${lessonHtml(ch)}
-
-    <div class="section-head"><h2>본문 — 例文 ${p.total}</h2></div>
-
-    <div class="study-tools">
+    <div class="study-tools study-nav-tools">
+      <div class="study-chapter-jump" aria-label="과 이동">
+        ${prev ? `<a class="chapter-step" href="#/study/${prev.id}" aria-label="이전 과">←</a>` : '<span class="chapter-step disabled" aria-hidden="true">←</span>'}
+        <span class="select-wrap select-sm">
+          <select data-action="study-ch-jump" aria-label="학습할 과 선택">
+            ${CHAPTERS.map(c => `<option value="${c.id}" ${c.id === ch.id ? 'selected' : ''}>${pad2(c.id)}. ${esc(c.title)}</option>`).join('')}
+          </select>
+        </span>
+        ${next ? `<a class="chapter-step" href="#/study/${next.id}" aria-label="다음 과">→</a>` : '<span class="chapter-step disabled" aria-hidden="true">→</span>'}
+      </div>
       <div class="seg" role="group" aria-label="표시 모드">
         <button class="${mode === 'all' ? 'active' : ''}" data-action="hide-mode" data-mode="all">모두 보기</button>
         <button class="${mode === 'hideKo' ? 'active' : ''}" data-action="hide-mode" data-mode="hideKo">한국어 가리기</button>
@@ -676,6 +679,10 @@ function viewStudy(id) {
         <a class="btn btn-sm btn-ghost" href="#/quiz?src=chapter&ch=${ch.id}">이 과 암기 →</a>
       </div>
     </div>
+
+    ${lessonHtml(ch)}
+
+    <div class="section-head"><h2>본문 — 例文 ${p.total}</h2></div>
 
     <div class="sentence-list">${items.map(sentenceCard).join('')}</div>
 
@@ -1484,7 +1491,7 @@ const WORD_INDEX = new Map();          // key -> 단어 객체
 for (const c of GRID_CATS) {
   const lv = c.level || '기초';
   for (const it of c.items) {
-    const w = { key: it[0] + '|' + it[1], disp: it[0], read: it[1], ko: it[2], level: lv, cat: c.title };
+    const w = { key: it[0] + '|' + it[1], disp: it[0], read: it[1], ko: it[2], level: lv, cat: c.title, catId: c.id };
     ALL_WORDS.push(w);
     if (!WORD_INDEX.has(w.key)) WORD_INDEX.set(w.key, w);
   }
@@ -1503,7 +1510,7 @@ function wordGridItem(it) {
     ? `<span class="jp wi-kana">${esc(disp)}</span>`
     : `<ruby class="jp">${esc(disp)}<rt>${esc(read)}</rt></ruby>`;
   return `
-  <button class="word-item" data-action="word-say" data-ch="${esc(read)}" title="발음 듣기">
+  <button class="word-item" data-action="word-say" data-ch="${esc(read)}" data-word-key="${esc(disp + '|' + read)}" title="발음 듣기">
     <span class="wi-spk">${ICON.play}</span>
     ${ruby}
     <span class="word-ko">${esc(ko)}</span>
@@ -1545,9 +1552,15 @@ function viewWords() {
     </div>
 
     <div class="study-tools words-tools">
-      <div class="word-jump">
-        ${list.map((c, i) => `<button class="word-chip wc-${i % 6}" data-action="words-jump" data-id="${c.id}">${esc(c.title)}</button>`).join('')}
-      </div>
+      <label class="word-jump-select">
+        <span>분류 바로가기</span>
+        <span class="select-wrap">
+          <select data-action="words-jump-select" aria-label="단어 분류 바로가기">
+            <option value="">분류를 선택하세요</option>
+            ${list.map(c => `<option value="${esc(c.id)}">${esc(c.title)} · ${wordCount(c)}개</option>`).join('')}
+          </select>
+        </span>
+      </label>
       <div class="words-toggles">
         <button class="btn btn-sm btn-ghost ${!wordsShowRead ? 'on' : ''}" data-action="words-read" aria-pressed="${!wordsShowRead}">발음 가리기</button>
         <button class="btn btn-sm btn-ghost ${wordsHideKo ? 'on' : ''}" data-action="words-hide" aria-pressed="${wordsHideKo}">뜻 가리기</button>
@@ -1563,51 +1576,168 @@ function viewWords() {
   </div>`;
 }
 
-/* ---------- 뷰: 검색 ---------- */
+/* ---------- 뷰: 통합 탐색 / 검색 ---------- */
 let searchQuery = '';
+
 function searchResults(q) {
   const query = q.trim();
-  if (!query) return [];
+  const out = {
+    sentences: [], grammar: [], words: [],
+    counts: { sentences: 0, grammar: 0, words: 0 },
+    total: 0,
+  };
+  if (!query) return out;
+
   const num = /^\d{1,4}$/.test(query) ? Number(query) : 0;
   const lower = query.toLowerCase();
-  const out = [];
+
   for (const s of SENTENCES) {
-    if (num ? s.n === num : (s.jp.includes(query) || s.ko.toLowerCase().includes(lower) || s.pt.toLowerCase().includes(lower))) {
-      out.push(s);
-      if (out.length >= 50) break;
+    const matched = num
+      ? s.n === num
+      : (s.jp.includes(query) || s.ko.toLowerCase().includes(lower) || s.pt.toLowerCase().includes(lower));
+    if (matched) {
+      out.counts.sentences++;
+      if (out.sentences.length < 30) out.sentences.push(s);
     }
   }
+
+  for (const g of GRAMMAR) {
+    const ch = chapterOf(g.id);
+    const matched = num
+      ? g.id === num
+      : ([g.formula, g.gist, g.intro, ch ? ch.title : ''].some(v => String(v || '').toLowerCase().includes(lower)));
+    if (matched) {
+      out.counts.grammar++;
+      if (out.grammar.length < 20) out.grammar.push({ ...g, ch });
+    }
+  }
+
+  for (const w of ALL_WORDS) {
+    const matched = [w.disp, w.read, w.ko, w.cat].some(v => String(v || '').toLowerCase().includes(lower));
+    if (matched) {
+      out.counts.words++;
+      if (out.words.length < 30) out.words.push(w);
+    }
+  }
+
+  out.total = out.counts.sentences + out.counts.grammar + out.counts.words;
   return out;
 }
+
 function hl(text, q) {
   if (!q) return esc(text);
-  const i = text.toLowerCase().indexOf(q.toLowerCase());
-  if (i < 0) return esc(text);
-  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
+  const source = String(text || '');
+  const i = source.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return esc(source);
+  return esc(source.slice(0, i)) + '<mark>' + esc(source.slice(i, i + q.length)) + '</mark>' + esc(source.slice(i + q.length));
 }
 
-const SEARCH_CHIPS = ['学校', '友だち', 'たら', 'てください', '0617'];
+const SEARCH_CHIPS = ['学校', '친구', 'てください', '가능형', '가족'];
 
-function searchListInner(q, res) {
-  if (!q.trim()) {
-    return `<div class="empty">
-      <span class="jp">探</span>찾고 싶은 단어나 문형을 입력해 보세요
+function exploreLandingHtml() {
+  const resume = resumeChapter();
+  const weakN = weakList().length;
+  const bookN = bookmarkList().length;
+  return `
+    <div class="explore-intro">
+      <div class="explore-title-row">
+        <h2>학습 자료</h2>
+        <span>원하는 방식으로 바로 이동</span>
+      </div>
+      <div class="explore-grid">
+        <a class="explore-card" href="#/all">
+          <span class="explore-card-mark jp">文</span>
+          <span><b>천문장 전체</b><small>${TOTAL}문장을 연속해서 읽기</small></span>
+          <i aria-hidden="true">→</i>
+        </a>
+        <a class="explore-card" href="#/chapters?tab=grammar">
+          <span class="explore-card-mark jp">法</span>
+          <span><b>문법 색인</b><small>${CHAPTERS.length}개 핵심 문형 찾기</small></span>
+          <i aria-hidden="true">→</i>
+        </a>
+        <a class="explore-card" href="#/words">
+          <span class="explore-card-mark jp">語</span>
+          <span><b>단어장</b><small>${ALL_WORDS.length.toLocaleString()}개 단어와 주제별 표현</small></span>
+          <i aria-hidden="true">→</i>
+        </a>
+        <a class="explore-card" href="#/kana">
+          <span class="explore-card-mark jp">あ</span>
+          <span><b>가나</b><small>히라가나·카타카나 표와 연습</small></span>
+          <i aria-hidden="true">→</i>
+        </a>
+      </div>
+    </div>
+    <div class="explore-title-row explore-my-title">
+      <h2>내 학습</h2>
+      <span>중단한 곳과 모아 둔 항목</span>
+    </div>
+    <div class="explore-my card">
+      <a href="#/study/${resume.id}"><span><b>이어서 학습</b><small>${pad2(resume.id)}. ${esc(resume.title)}</small></span><em>계속 →</em></a>
+      <a href="#/quiz?src=weak"><span><b>복습 대기</b><small>틀렸던 문장 다시 보기</small></span><em>${weakN}문장</em></a>
+      <a href="#/quiz?src=book"><span><b>북마크</b><small>저장한 문장만 모아 보기</small></span><em>${bookN}문장</em></a>
+    </div>
+    <div class="search-suggestions">
+      <span>추천 검색</span>
       <div class="search-chips">
         ${SEARCH_CHIPS.map(x => `<button class="search-chip ${/[぀-ヿ一-龯]/.test(x) ? 'jp' : ''}" data-action="search-fill" data-q="${esc(x)}">${esc(x)}</button>`).join('')}
       </div>
     </div>`;
-  }
-  if (res.length === 0) return `<div class="empty"><span class="jp">無</span>일치하는 문장이 없어요</div>`;
-  return res.map(s => `
-    <a class="result-item" href="#/study/${s.ch}?focus=${s.n}">
-      <div class="r-top"><span class="s-num jp">${pad4(s.n)}</span>${levelChip(chapterOf(s.ch).level)}<span>${pad2(s.ch)}. ${esc(chapterOf(s.ch).title)}</span></div>
-      <div class="jp">${hl(s.jp, q)}</div>
-      <div class="ko">${hl(s.ko, q)}</div>
-    </a>`).join('');
+}
+
+function searchListInner(q, res) {
+  if (!q.trim()) return exploreLandingHtml();
+  if (res.total === 0) return `<div class="empty"><span class="jp">無</span>일치하는 문장·문법·단어가 없습니다.</div>`;
+
+  const sentenceHtml = res.sentences.length ? `
+    <section class="search-group">
+      <header><h2>문장</h2><span>${res.counts.sentences}건${res.counts.sentences > res.sentences.length ? ` · 상위 ${res.sentences.length}건` : ''}</span></header>
+      <div class="search-group-list">
+        ${res.sentences.map(s => `
+          <a class="result-item" href="#/study/${s.ch}?focus=${s.n}">
+            <div class="r-top"><span class="s-num jp">${pad4(s.n)}</span>${levelChip(chapterOf(s.ch).level)}<span>${pad2(s.ch)}. ${esc(chapterOf(s.ch).title)}</span></div>
+            <div class="jp">${hl(s.jp, q)}</div>
+            <div class="ko">${hl(s.ko, q)}</div>
+          </a>`).join('')}
+      </div>
+    </section>` : '';
+
+  const grammarHtml = res.grammar.length ? `
+    <section class="search-group">
+      <header><h2>문법</h2><span>${res.counts.grammar}건</span></header>
+      <div class="search-group-list">
+        ${res.grammar.map(g => `
+          <a class="result-item grammar-result" href="#/grammar/${g.id}">
+            <div class="r-top"><span class="s-num">${pad2(g.id)}</span>${g.ch ? levelChip(g.ch.level) : ''}<span>문법 해설</span></div>
+            <div class="jp">${hl(g.formula, q)}</div>
+            <div class="ko">${hl(g.gist, q)}</div>
+          </a>`).join('')}
+      </div>
+    </section>` : '';
+
+  const wordHtml = res.words.length ? `
+    <section class="search-group">
+      <header><h2>단어</h2><span>${res.counts.words}건${res.counts.words > res.words.length ? ` · 상위 ${res.words.length}건` : ''}</span></header>
+      <div class="search-group-list word-result-grid">
+        ${res.words.map(w => `
+          <a class="result-item word-result" href="#/words?level=${encodeURIComponent(w.level)}&cat=${encodeURIComponent(w.catId || '')}&word=${encodeURIComponent(w.key)}">
+            <div class="r-top">${levelChip(w.level)}<span>${esc(w.cat)}</span></div>
+            <div class="jp">${hl(w.disp, q)}${w.read && w.read !== w.disp ? ` <small>${hl(w.read, q)}</small>` : ''}</div>
+            <div class="ko">${hl(w.ko, q)}</div>
+          </a>`).join('')}
+      </div>
+    </section>` : '';
+
+  return sentenceHtml + grammarHtml + wordHtml;
 }
 
 function searchMetaHtml(q, res) {
-  return q.trim() ? `<p class="search-meta">“${esc(q)}” 검색 결과 ${res.length}건${res.length >= 50 ? ' (상위 50건만 표시)' : ''}</p>` : '';
+  if (!q.trim()) return '';
+  return `<p class="search-meta">“${esc(q)}” · 문장 ${res.counts.sentences} · 문법 ${res.counts.grammar} · 단어 ${res.counts.words}</p>`;
+}
+
+function syncSearchUrl() {
+  const hash = '#/search' + (searchQuery.trim() ? '?q=' + encodeURIComponent(searchQuery.trim()) : '');
+  if (location.hash !== hash) history.replaceState(null, '', location.pathname + location.search + hash);
 }
 
 function renderSearchResults() {
@@ -1617,18 +1747,21 @@ function renderSearchResults() {
   list.insertAdjacentHTML('beforebegin', searchMetaHtml(searchQuery, res));
   list.innerHTML = searchListInner(searchQuery, res);
   const clr = $('.search-clear'); if (clr) clr.classList.toggle('show', !!searchQuery.trim());
+  syncSearchUrl();
 }
 
 function viewSearch() {
   const q = searchQuery;
   const res = searchResults(q);
+  const course = courseMeta(S.currentCourse);
   return `
-  <div class="view">
-    <h1 class="page-title">검색 — 探す</h1>
-    <p class="page-sub">일본어 · 한국어 뜻 · 문형 · 문장 번호로 ${TOTAL}문장을 바로 찾습니다.</p>
-    <div class="search-box">
-      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="search" id="search-input" placeholder="예: 学校 / 학교 / たら / 0432" value="${esc(q)}" autocomplete="off" enterkeyhint="search">
+  <div class="view explore-view">
+    <span class="page-kicker">찾기 · 모아보기</span>
+    <h1 class="page-title">탐색 — 探す</h1>
+    <p class="page-sub">${course.label} 코스의 문장·문법과 전체 단어장을 한 번에 찾거나, 학습 자료로 바로 이동하세요.</p>
+    <div class="search-box explore-search-box">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" id="search-input" placeholder="문장·문법·단어·번호 검색" value="${esc(q)}" autocomplete="off" enterkeyhint="search" aria-label="문장, 문법, 단어 통합 검색">
       <button class="search-clear ${q.trim() ? 'show' : ''}" data-action="search-clear" aria-label="지우기" title="지우기">${ICON.x}</button>
     </div>
     ${searchMetaHtml(q, res)}
@@ -1637,6 +1770,17 @@ function viewSearch() {
 }
 
 /* ---------- 설정 모달 ---------- */
+function openCourseMenu() {
+  $('#modal-root').innerHTML = `
+  <div class="modal-overlay" data-action="close-modal">
+    <div class="modal course-modal" role="dialog" aria-modal="true" aria-label="학습 코스 선택">
+      <h2>학습 코스 <button class="icon-btn" data-action="close-modal" aria-label="닫기">${ICON.x}</button></h2>
+      <p class="course-modal-sub">문장·문법·검색 결과에 적용할 코스를 선택하세요.</p>
+      ${courseSwitchHtml()}
+    </div>
+  </div>`;
+}
+
 function openSettings() {
   const t = S.settings.theme;
   $('#modal-root').innerHTML = `
@@ -1709,19 +1853,19 @@ function render() {
   if (page === 'home') { html = viewHome(); nav = 'home'; }
   else if (page === 'chapters') {
     if (params.get('tab')) chaptersTab = params.get('tab') === 'grammar' ? 'grammar' : 'list';
-    html = viewChapters(); nav = 'chapters';
+    html = viewChapters(); nav = 'learn';
   }
   else if (page === 'study') {
     const id = Number(seg[1]) || 1;
     html = viewStudy(Math.min(Math.max(id, 1), CHAPTERS.length));
-    nav = 'chapters';
+    nav = 'learn';
   }
   else if (page === 'grammar') {
     const gid = Math.min(Math.max(Number(seg[1]) || 1, 1), CHAPTERS.length);
     html = viewGrammar(gid);
-    nav = 'chapters';
+    nav = 'learn';
   }
-  else if (page === 'all') { html = viewAll(); nav = 'all'; }
+  else if (page === 'all') { html = viewAll(); nav = 'explore'; }
   else if (page === 'quiz' && seg[1] === 'run') { html = viewQuizRun(); nav = 'quiz'; }
   else if (page === 'quiz') {
     // 홈/학습에서 진입 시 소스 사전 선택
@@ -1748,16 +1892,29 @@ function render() {
     }
     html = viewAutoSetup(); nav = 'auto';
   }
-  else if (page === 'kana') { html = viewKana(); nav = 'kana'; }
-  else if (page === 'words') { html = viewWords(); nav = 'words'; }
-  else if (page === 'search') { html = viewSearch(); nav = 'search'; }
+  else if (page === 'kana') { html = viewKana(); nav = 'explore'; }
+  else if (page === 'words') {
+    const level = params.get('level');
+    if (level && ['전체', ...WORD_LEVELS_ALL].includes(level)) wordsLevel = level;
+    html = viewWords(); nav = 'explore';
+  }
+  else if (page === 'search') {
+    searchQuery = params.get('q') || '';
+    html = viewSearch(); nav = 'explore';
+  }
   else { html = viewHome(); }
 
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   app.innerHTML = html;
 
   // 활성 내비게이션 표시
-  $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === nav));
+  $$('[data-nav]').forEach(a => {
+    const active = a.dataset.nav === nav;
+    a.classList.toggle('active', active);
+    if (active) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+  updateCourseControl();
 
   // 자동 학습 재생 시작(진입 시 1회)
   if (page === 'auto' && seg[1] === 'run' && autoPlayer) {
@@ -1778,11 +1935,46 @@ function render() {
     window.scrollTo(0, 0);
   }
 
+  // 단어 검색 결과에서 정확한 분류·단어로 이동
+  if (page === 'words' && params.get('cat')) {
+    requestAnimationFrame(() => {
+      const section = document.getElementById('words-sec-' + params.get('cat'));
+      const wordKey = params.get('word');
+      const word = wordKey ? $$('.word-item').find(el => el.dataset.wordKey === wordKey) : null;
+      const target = word || section;
+      if (target) {
+        target.scrollIntoView({ block: word ? 'center' : 'start', behavior: 'auto' });
+        if (word) {
+          word.classList.add('search-target');
+          setTimeout(() => word.classList.remove('search-target'), 1800);
+        }
+      }
+    });
+  }
+
   // 검색 입력 바인딩 (입력 포커스 유지한 채 결과만 갱신)
   const si = $('#search-input');
   if (si) {
     si.addEventListener('input', () => { searchQuery = si.value; renderSearchResults(); });
     if (!('ontouchstart' in window)) { si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
+  }
+
+  // 목차·문법 색인은 현재 목록을 즉시 필터링
+  const chapterSearch = $('#chapter-search');
+  if (chapterSearch) {
+    chapterSearch.addEventListener('input', () => {
+      const q = chapterSearch.value.trim().toLowerCase();
+      let visible = 0;
+      $$('.chapter-item').forEach(item => {
+        const show = !q || (item.dataset.search || '').includes(q);
+        item.hidden = !show;
+        if (show) visible++;
+      });
+      const count = $('#chapter-search-count');
+      const empty = $('#chapter-no-results');
+      if (count) count.textContent = `${visible}개`;
+      if (empty) empty.hidden = visible > 0;
+    });
   }
 }
 
@@ -1834,6 +2026,7 @@ document.addEventListener('click', e => {
       save(); applyTheme();
       break;
     }
+    case 'open-course-menu': openCourseMenu(); break;
     case 'open-settings': openSettings(); break;
     case 'inapp-dismiss': {
       try { localStorage.setItem(STORE_INAPP, '1'); } catch (e) {}
@@ -1976,7 +2169,10 @@ document.addEventListener('click', e => {
       break;
     }
     case 'words-level': {
-      if (wordsLevel !== t.dataset.level) { wordsLevel = t.dataset.level; render(); }
+      if (wordsLevel !== t.dataset.level) {
+        wordsLevel = t.dataset.level;
+        location.hash = '#/words?level=' + encodeURIComponent(wordsLevel);
+      }
       break;
     }
     case 'words-jump': {
@@ -2037,6 +2233,14 @@ document.addEventListener('change', e => {
     const el = $('#all-ch-' + j.value);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  const sj = e.target.closest('[data-action="study-ch-jump"]');
+  if (sj && sj.value) location.hash = '#/study/' + sj.value;
+  const wj = e.target.closest('[data-action="words-jump-select"]');
+  if (wj && wj.value) {
+    const el = document.getElementById('words-sec-' + wj.value);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    wj.value = '';
+  }
 });
 
 document.addEventListener('keydown', e => {
@@ -2067,6 +2271,14 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('keydown', e => {
   if (e.code === 'Escape') closeModal();
+  if (e.key === '/' && !e.target.matches('input, select, textarea') && !$('#modal-root').children.length) {
+    e.preventDefault();
+    if (location.hash.startsWith('#/search')) {
+      const input = $('#search-input'); if (input) input.focus();
+    } else {
+      location.hash = '#/search';
+    }
+  }
 });
 
 window.addEventListener('hashchange', render);
