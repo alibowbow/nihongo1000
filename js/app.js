@@ -355,94 +355,37 @@ function ringSvg(pct, size = 132, stroke = 9, label = '달성률') {
 /* ---------- 뷰: 홈 ---------- */
 function viewHome() {
   const total = learnedCount();
-  const pct = total / TOTAL;
-
+  const pct = TOTAL ? Math.round(total / TOTAL * 100) : 0;
   const resume = resumeChapter();
   const rp = chapterProgress(resume);
   const fresh = total === 0;
   const allDone = total === TOTAL;
-
-  // 레벨별 진행 (현재 코스에 등장하는 레벨만)
-  const levels = courseLevels().map(lv => {
-    const chs = CHAPTERS.filter(c => c.level === lv);
-    let done = 0, tot = 0;
-    chs.forEach(c => { const p = chapterProgress(c); done += p.done; tot += p.total; });
-    return { lv, done, tot };
-  });
-
-  // 오늘의 문장 (날짜 기반 고정)
-  const dayIdx = Math.floor(Date.now() / 86400000) % TOTAL;
-  const tod = SENTENCES[dayIdx];
-  const todCh = chapterOf(tod.ch);
-
+  const course = courseMeta(S.currentCourse);
   const weakN = weakList().length;
   const bookN = bookmarkList().length;
 
   return `
-  <div class="view">
-    <section class="card hero">
-      <div class="hero-grid">
-        <div>
-          <span class="hero-kicker">Sentence-first Japanese</span>
-          <h1>천 문장이 천 일의 힘이 됩니다</h1>
-          <p class="lead">핵심 문형 ${CHAPTERS.length}과를 따라 하루 20문장씩, 소리 내어 읽고 가리고 바꿔 말하는 천일문 학습법으로 일본어의 뼈대를 세워 보세요.</p>
-          <div class="hero-cta">
-            <a class="btn btn-primary btn-lg" href="#/study/${resume.id}">
-              ${fresh ? '학습 시작하기' : allDone ? '복습 시작하기' : '이어서 학습하기'} ${ICON.arrowR}
-            </a>
-            ${(!fresh && resume.id !== 1) ? `<a class="btn btn-ghost btn-lg" href="#/study/1">처음부터</a>` : ''}
-            ${fresh ? `<a class="btn btn-ghost btn-lg" href="#/kana"><span class="jp" style="margin-right:6px">あ</span>가나부터</a>` : ''}
-            <a class="btn btn-ghost btn-lg" href="#/auto">${ICON.playFill}<span style="margin-left:6px">자동 학습</span></a>
-          </div>
-          <p class="resume-meta">
-            ${fresh
-              ? `<b>01. ${esc(CHAPTERS[0].title)}</b>부터 시작해요 · 하루 20문장이면 50일 완성`
-              : `이어서 학습: <b>${pad2(resume.id)}. ${esc(resume.title)}</b> · ${rp.done}/${rp.total}문장 · 전체 ${total}/${TOTAL}`}
-          </p>
+  <div class="view home-view">
+    <section class="card home-resume">
+      <div class="home-resume-copy">
+        <span class="home-course">${esc(course.label)} · ${esc(course.sub)}</span>
+        <h1>${pad2(resume.id)}. ${esc(resume.title)}</h1>
+        <p>${fresh ? '첫 20문장부터 바로 시작하세요.' : `${rp.done}/${rp.total}문장 완료 · 전체 ${total}/${TOTAL} · 오늘 ${todayCount()}문장`}</p>
+        <div class="home-progress" aria-label="전체 학습 진도 ${pct}%">
+          <i style="width:${pct}%"></i>
         </div>
-        ${ringSvg(pct)}
+      </div>
+      <div class="home-resume-actions">
+        <a class="btn btn-primary btn-lg" href="#/study/${resume.id}">
+          ${fresh ? '학습 시작' : allDone ? '복습 시작' : '이어서 학습'} ${ICON.arrowR}
+        </a>
       </div>
     </section>
 
-    <div class="stat-grid">
-      <a class="stat is-link" href="#/all"><b>${total}<small>/ ${TOTAL}문장</small></b><span>학습 완료 →</span></a>
-      <div class="stat"><b>${todayCount()}<small>문장</small></b><span>오늘 학습</span></div>
-      <a class="stat is-link ${weakN ? '' : 'stat-muted'}" href="#/quiz?src=weak"><b>${weakN}<small>문장</small></b><span>복습 대기 ${weakN ? '→' : ''}</span></a>
-      <div class="stat"><b>${S.streak.count}<small>일</small></b><span>연속 학습 🔥</span></div>
-    </div>
-
-    <div class="section-head"><h2>오늘의 문장</h2><a href="#/study/${tod.ch}?focus=${tod.n}">본문에서 보기</a></div>
-    <section class="card today-card">
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="s-num jp">${pad4(tod.n)}</span>${levelChip(todCh.level)}
-      </div>
-      <p class="jp-line jp">${esc(tod.jp)}</p>
-      <p class="ko-line">${esc(tod.ko)}</p>
-      <div class="meta">
-        ${ptChip(tod.pt)}
-        <button class="s-btn" data-action="speak" data-n="${tod.n}" style="margin-left:auto">${ICON.play} 듣기</button>
-      </div>
+    <section class="card home-glance" aria-label="학습 현황">
+      <a href="#/quiz?src=weak"><small>복습 대기</small><b>${weakN}문장</b></a>
+      <a href="#/quiz?src=book"><small>북마크</small><b>${bookN}문장</b></a>
     </section>
-
-    <div class="section-head"><h2>레벨별 진행</h2><a href="#/chapters">전체 목차 →</a></div>
-    <section class="card level-rows">
-      ${levels.map(l => `
-        <div class="level-row">
-          ${levelChip(l.lv)}
-          <div class="bar"><i class="c-${l.lv.toLowerCase()}" style="width:${l.tot ? (l.done / l.tot * 100) : 0}%"></i></div>
-          <span class="nums">${l.done} / ${l.tot}</span>
-        </div>`).join('')}
-    </section>
-
-    <div class="section-head"><h2>빠른 탐색</h2></div>
-    <a class="explore-cta card" href="#/search">
-      <span class="explore-cta-mark jp">探</span>
-      <span>
-        <b>문장·문법·단어를 한곳에서 찾기</b>
-        <small>천문장, 문법 색인, 단어장, 가나까지 탐색 메뉴에 모았습니다.</small>
-      </span>
-      <span class="explore-arrow" aria-hidden="true">→</span>
-    </a>
   </div>`;
 }
 
@@ -1576,7 +1519,7 @@ function viewWords() {
   </div>`;
 }
 
-/* ---------- 뷰: 통합 탐색 / 검색 ---------- */
+/* ---------- 뷰: 통합 검색 ---------- */
 let searchQuery = '';
 
 function searchResults(q) {
@@ -1634,50 +1577,12 @@ function hl(text, q) {
 
 const SEARCH_CHIPS = ['学校', '친구', 'てください', '가능형', '가족'];
 
-function exploreLandingHtml() {
-  const resume = resumeChapter();
-  const weakN = weakList().length;
-  const bookN = bookmarkList().length;
+function searchLandingHtml() {
   return `
-    <div class="explore-intro">
-      <div class="explore-title-row">
-        <h2>학습 자료</h2>
-        <span>원하는 방식으로 바로 이동</span>
-      </div>
-      <div class="explore-grid">
-        <a class="explore-card" href="#/all">
-          <span class="explore-card-mark jp">文</span>
-          <span><b>천문장 전체</b><small>${TOTAL}문장을 연속해서 읽기</small></span>
-          <i aria-hidden="true">→</i>
-        </a>
-        <a class="explore-card" href="#/chapters?tab=grammar">
-          <span class="explore-card-mark jp">法</span>
-          <span><b>문법 색인</b><small>${CHAPTERS.length}개 핵심 문형 찾기</small></span>
-          <i aria-hidden="true">→</i>
-        </a>
-        <a class="explore-card" href="#/words">
-          <span class="explore-card-mark jp">語</span>
-          <span><b>단어장</b><small>${ALL_WORDS.length.toLocaleString()}개 단어와 주제별 표현</small></span>
-          <i aria-hidden="true">→</i>
-        </a>
-        <a class="explore-card" href="#/kana">
-          <span class="explore-card-mark jp">あ</span>
-          <span><b>가나</b><small>히라가나·카타카나 표와 연습</small></span>
-          <i aria-hidden="true">→</i>
-        </a>
-      </div>
-    </div>
-    <div class="explore-title-row explore-my-title">
-      <h2>내 학습</h2>
-      <span>중단한 곳과 모아 둔 항목</span>
-    </div>
-    <div class="explore-my card">
-      <a href="#/study/${resume.id}"><span><b>이어서 학습</b><small>${pad2(resume.id)}. ${esc(resume.title)}</small></span><em>계속 →</em></a>
-      <a href="#/quiz?src=weak"><span><b>복습 대기</b><small>틀렸던 문장 다시 보기</small></span><em>${weakN}문장</em></a>
-      <a href="#/quiz?src=book"><span><b>북마크</b><small>저장한 문장만 모아 보기</small></span><em>${bookN}문장</em></a>
-    </div>
-    <div class="search-suggestions">
-      <span>추천 검색</span>
+    <div class="search-empty-guide">
+      <span class="search-empty-mark jp" aria-hidden="true">探</span>
+      <b>찾을 내용을 입력하세요</b>
+      <p>일본어·한국어 뜻·문법 표현·문장 번호를 함께 검색합니다.</p>
       <div class="search-chips">
         ${SEARCH_CHIPS.map(x => `<button class="search-chip ${/[぀-ヿ一-龯]/.test(x) ? 'jp' : ''}" data-action="search-fill" data-q="${esc(x)}">${esc(x)}</button>`).join('')}
       </div>
@@ -1685,7 +1590,7 @@ function exploreLandingHtml() {
 }
 
 function searchListInner(q, res) {
-  if (!q.trim()) return exploreLandingHtml();
+  if (!q.trim()) return searchLandingHtml();
   if (res.total === 0) return `<div class="empty"><span class="jp">無</span>일치하는 문장·문법·단어가 없습니다.</div>`;
 
   const sentenceHtml = res.sentences.length ? `
@@ -1756,9 +1661,9 @@ function viewSearch() {
   const course = courseMeta(S.currentCourse);
   return `
   <div class="view explore-view">
-    <span class="page-kicker">찾기 · 모아보기</span>
-    <h1 class="page-title">탐색 — 探す</h1>
-    <p class="page-sub">${course.label} 코스의 문장·문법과 전체 단어장을 한 번에 찾거나, 학습 자료로 바로 이동하세요.</p>
+    <span class="page-kicker">${esc(course.label)} 코스</span>
+    <h1 class="page-title">통합 검색</h1>
+    <p class="page-sub">문장·문법·단어를 한 번에 찾습니다.</p>
     <div class="search-box explore-search-box">
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="search" id="search-input" placeholder="문장·문법·단어·번호 검색" value="${esc(q)}" autocomplete="off" enterkeyhint="search" aria-label="문장, 문법, 단어 통합 검색">
@@ -1845,12 +1750,12 @@ function render() {
   const { seg, params } = parseHash();
   const page = seg[0] || 'home';
   let html = '';
-  let nav = 'home';
+  let nav = '';
 
   // 자동 학습 재생 화면을 벗어나면 재생 중지
   if (autoPlayer && !(page === 'auto' && seg[1] === 'run')) autoStop();
 
-  if (page === 'home') { html = viewHome(); nav = 'home'; }
+  if (page === 'home') { html = viewHome(); }
   else if (page === 'chapters') {
     if (params.get('tab')) chaptersTab = params.get('tab') === 'grammar' ? 'grammar' : 'list';
     html = viewChapters(); nav = 'learn';
@@ -1865,7 +1770,7 @@ function render() {
     html = viewGrammar(gid);
     nav = 'learn';
   }
-  else if (page === 'all') { html = viewAll(); nav = 'explore'; }
+  else if (page === 'all') { html = viewAll(); nav = 'sentences'; }
   else if (page === 'quiz' && seg[1] === 'run') { html = viewQuizRun(); nav = 'quiz'; }
   else if (page === 'quiz') {
     // 홈/학습에서 진입 시 소스 사전 선택
@@ -1892,15 +1797,15 @@ function render() {
     }
     html = viewAutoSetup(); nav = 'auto';
   }
-  else if (page === 'kana') { html = viewKana(); nav = 'explore'; }
+  else if (page === 'kana') { html = viewKana(); nav = 'kana'; }
   else if (page === 'words') {
     const level = params.get('level');
     if (level && ['전체', ...WORD_LEVELS_ALL].includes(level)) wordsLevel = level;
-    html = viewWords(); nav = 'explore';
+    html = viewWords(); nav = 'words';
   }
   else if (page === 'search') {
     searchQuery = params.get('q') || '';
-    html = viewSearch(); nav = 'explore';
+    html = viewSearch(); nav = 'search';
   }
   else { html = viewHome(); }
 
