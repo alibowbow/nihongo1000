@@ -38,8 +38,12 @@ const shuffle = arr => {
 };
 const sentence = n => SENTENCES[n - 1];
 const chapterOf = id => CHAPTERS[id - 1];
+// 주소·저장값에서 온 과 번호 검증: 1..과 수의 정수만 인정(아니면 0), 화면용은 범위로 맞춘다(NaN·소수·범위 밖 → 1~끝)
+const chapterNo = v => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= CHAPTERS.length ? n : 0; };
+const clampChapter = v => Math.min(Math.max(Math.floor(Number(v)) || 1, 1), CHAPTERS.length);
 const mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 const reduceMotion = () => mqReduce.matches;
+const scrollBehavior = () => reduceMotion() ? 'instant' : 'smooth';   // '동작 줄이기'면 부드러운 스크롤도 끈다
 
 /* ---------- 상태 (localStorage) ---------- */
 const STORE_KEY = 'nihongo1000.v1';
@@ -106,6 +110,8 @@ function setCourse(id) {
   root.dataset.course = meta.id;       // 코스별 포인트색(CSS가 data-course로 전환)
 }
 setCourse(S.currentCourse);
+// 손상됐거나 직접 고친 저장값이 있어도 화면이 깨지지 않게
+if (!chapterNo(S.settings.auto.ch)) S.settings.auto.ch = 1;
 
 let saveTimer = null;
 function save() {
@@ -221,6 +227,8 @@ function applyTheme() {
   const t = S.settings.theme;
   const dark = t === 'dark' || (t === 'auto' && mqDark.matches);
   root.dataset.theme = dark ? 'dark' : 'light';
+  const next = dark ? '라이트 모드로 전환' : '다크 모드로 전환';
+  $$('[data-action="toggle-theme"]').forEach(b => { b.setAttribute('aria-label', next); b.title = next; });
   // 브라우저 UI 색(주소창·상태바)도 현재 테마에 맞춘다 — media 지정 메타를 하나로 정리
   const metas = $$('meta[name="theme-color"]');
   metas.forEach((m, i) => { if (i) m.remove(); });
@@ -299,7 +307,7 @@ function mountInAppBanner() {
   d.innerHTML = `<span class="iab-ico" aria-hidden="true">${ic('volume')}</span>`
     + `<span class="iab-txt">카카오톡 등 <b>인앱 브라우저</b>에서는 음성이 안 나올 수 있어요. 우측 메뉴(⋮ 또는 공유) → <b>다른 브라우저로 열기</b>로 열어 주세요.</span>`
     + `<button class="iab-x" type="button" data-action="inapp-dismiss" aria-label="닫기">${ic('close')}</button>`;
-  document.body.appendChild(d);
+  app.parentNode.insertBefore(d, app);   // 본문 위에 흐름대로 — 하단 독·시작 바를 가리지 않는다
 }
 function noticeTTSFail(unsupported) {
   ttsBlocked = true;
@@ -484,18 +492,28 @@ function openSheet(kind, title, html) {
 }
 function setSheetBody(html) {
   const y = sheetBody.scrollTop, snap = snapSegs(sheetBody);
+  const fk = focusKeyOf(document.activeElement, sheetBody);     // 눌렀던 컨트롤로 키보드 포커스를 되돌린다
   sheetBody.innerHTML = html;
   sheetBody.scrollTop = y;
   flipSegs(sheetBody, snap);
+  restoreFocus(fk, sheetBody);
 }
 function closeSheet() {
   if (!sheetEl.open || sheetEl.classList.contains('closing')) return;
   sheetEl.classList.add('closing');
-  const done = () => { sheetEl.close(); sheetEl.classList.remove('closing'); sheetKind = ''; };
+  const panel = $('.sheet-panel', sheetEl);
+  const done = () => {
+    if (!sheetEl.classList.contains('closing')) return;       // 그 사이 다시 열렸다면 이전 타이머는 무시
+    sheetEl.close(); sheetEl.classList.remove('closing', 'dragged'); sheetKind = '';
+    panel.style.transition = panel.style.transform = panel.style.opacity = '';
+  };
   if (reduceMotion()) done(); else setTimeout(done, 190);
 }
 sheetEl.addEventListener('cancel', e => { e.preventDefault(); closeSheet(); });          // Esc
-sheetEl.addEventListener('click', e => { if (e.target === sheetEl) closeSheet(); });     // 바깥(배경) 눌러 닫기
+// 바깥(배경) 눌러 닫기 — 눌림이 배경에서 시작했을 때만(시트 안에서 눌러 바깥에서 놓는 경우는 제외)
+let sheetDownOnBackdrop = false;
+sheetEl.addEventListener('pointerdown', e => { sheetDownOnBackdrop = e.target === sheetEl; });
+sheetEl.addEventListener('click', e => { if (e.target === sheetEl && sheetDownOnBackdrop) closeSheet(); sheetDownOnBackdrop = false; });
 
 // 모바일 바텀시트: 손잡이·제목줄을 아래로 끌어 닫기
 (() => {
@@ -508,9 +526,13 @@ sheetEl.addEventListener('click', e => { if (e.target === sheetEl) closeSheet();
   };
   const move = e => { if (!drag) return; dy = Math.max(0, e.clientY - y0); panel.style.transform = `translateY(${dy}px)`; };
   const end = () => {
-    if (!drag) return; drag = false; panel.style.transition = '';
-    if (dy > 90) { panel.style.transform = ''; closeSheet(); }
-    else panel.style.transform = '';
+    if (!drag) return; drag = false;
+    if (dy > 90) {                                   // 끌던 위치에서 그대로 아래로 내려가며 닫힌다
+      sheetEl.classList.add('dragged');
+      panel.style.transition = 'transform .18s cubic-bezier(.4, 0, 1, 1), opacity .18s ease-in';
+      panel.style.transform = 'translateY(100%)'; panel.style.opacity = '0';
+      closeSheet();
+    } else { panel.style.transition = ''; panel.style.transform = ''; }
   };
   panel.addEventListener('pointerdown', start);
   panel.addEventListener('pointermove', move);
@@ -536,12 +558,14 @@ function settleConfirm(v) {
   if (!confirmResolve) return;
   const r = confirmResolve; confirmResolve = null;
   confirmEl.classList.add('closing');
-  const done = () => { confirmEl.close(); confirmEl.classList.remove('closing'); };
+  const done = () => { if (!confirmEl.classList.contains('closing')) return; confirmEl.close(); confirmEl.classList.remove('closing'); };
   if (reduceMotion()) done(); else setTimeout(done, 170);
   r(v);
 }
 confirmEl.addEventListener('cancel', e => { e.preventDefault(); settleConfirm(false); });
-confirmEl.addEventListener('click', e => { if (e.target === confirmEl) settleConfirm(false); });
+let confirmDownOnBackdrop = false;
+confirmEl.addEventListener('pointerdown', e => { confirmDownOnBackdrop = e.target === confirmEl; });
+confirmEl.addEventListener('click', e => { if (e.target === confirmEl && confirmDownOnBackdrop) settleConfirm(false); confirmDownOnBackdrop = false; });
 
 /* 설정 시트 */
 function settingsHtml() {
@@ -662,21 +686,28 @@ function updateRailStatus() {
   if (html !== railStatusCache) { railStatusCache = html; el.innerHTML = html; }
 }
 
-/* 화면 전환 효과(View Transitions) — 지원하지 않거나 '동작 줄이기'면 즉시 실행 */
-function withVT(kind, fn) {
-  if (document.startViewTransition && !reduceMotion()) {
-    root.dataset.vt = kind;
-    const t = document.startViewTransition(fn);
-    t.finished.finally(() => { delete root.dataset.vt; });
-  } else fn();
+/* 화면 전환 효과(View Transitions) — 지원하지 않거나 '동작 줄이기'면 즉시 실행.
+   전환 애니메이션이 도는 동안에는 ::view-transition 오버레이가 포인터를 가로채므로,
+   (1) 전환은 짧게(화면 전체를 가볍게 교차 — 본문이 떠오르는 움직임은 .enter가 맡는다),
+   (2) 새 탭·클릭이 시작되면 진행 중인 전환을 바로 마무리한다. */
+let activeVT = null;
+function runVT(fn, kind) {
+  if (!document.startViewTransition || reduceMotion()) { fn(); return; }
+  if (kind) root.dataset.vt = kind;
+  const t = document.startViewTransition(fn);
+  activeVT = t;
+  const done = () => { if (activeVT === t) activeVT = null; if (kind && root.dataset.vt === kind) delete root.dataset.vt; };
+  t.ready.catch(() => {});             // 건너뛰거나 중단돼도 콘솔에 거부 오류가 남지 않게
+  t.finished.then(done, done);
 }
+document.addEventListener('pointerdown', () => { if (activeVT) activeVT.skipTransition(); }, true);
 
 function switchCourse(id) {
   if (!COURSES.some(c => c.id === id)) return;
   if (id === S.currentCourse) { closeSheet(); return; }
   if (autoPlayer) autoStop();
   closeSheet();
-  withVT('course', () => {
+  runVT(() => {
     setCourse(id);
     chapterFilter = 'ALL'; allFilter = 'ALL'; allState = 'ALL';
     quizSetup.ch = 1; quizSession = null;
@@ -684,7 +715,7 @@ function switchCourse(id) {
     save();
     updateCourseControl(); updateRailStatus();
     render();
-  });
+  }, 'course');
   toast(`${courseMeta(id).label} 코스로 전환했어요`, 'sparkle');
 }
 
@@ -1349,7 +1380,7 @@ function viewWords() {
 function startBar(summary, label, action, extra = '') {
   return `
   <div class="start-bar" role="region" aria-label="시작">
-    <div class="sb-copy"><small>선택한 구성</small><b>${summary}</b></div>
+    <div class="sb-copy"><small>선택한 구성</small><b>${esc(summary)}</b></div>
     ${extra}
     <button type="button" class="btn btn-primary btn-lg" data-action="${action}">${label} ${ic('arrow-right')}</button>
   </div>`;
@@ -2208,9 +2239,10 @@ function viewSearch() {
 /* ---------- 라우터 ---------- */
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, '');
-  const [pathPart, queryPart] = h.split('?');
+  const qi = h.indexOf('?');                                   // 첫 '?'만 경로와 질의의 경계로 본다
+  const pathPart = qi < 0 ? h : h.slice(0, qi), queryPart = qi < 0 ? '' : h.slice(qi + 1);
   const seg = pathPart.split('/').filter(Boolean);
-  const params = new URLSearchParams(queryPart || '');
+  const params = new URLSearchParams(queryPart);
   return { seg, params };
 }
 
@@ -2219,6 +2251,19 @@ let currentHub = 'home';
 
 /* 화면 결정. nav=true일 때만 주소의 파라미터를 상태에 반영한다(상태 변경에 따른 재렌더가 선택을 덮어쓰지 않도록) */
 function resolveRoute(nav) {
+  try { return resolveRouteRaw(nav); }
+  catch (err) {                                                  // 예기치 못한 상태·주소로 화면 계산이 실패해도 빈 화면 대신 안내를 보여 준다
+    console.error(err);
+    return { html: errorView(), hub: 'home', leaf: 'home', title: '문제가 생겼어요', memo: '', page: 'error', seg: [], params: new URLSearchParams() };
+  }
+}
+function errorView() {
+  return `
+  <div class="page">
+    <div class="empty"><span class="jp" aria-hidden="true">困</span><b>화면을 불러오지 못했어요</b>잠시 뒤 다시 시도하거나 홈으로 돌아가 주세요.<a class="btn btn-primary" href="#/">홈으로</a></div>
+  </div>`;
+}
+function resolveRouteRaw(nav) {
   const { seg, params } = parseHash();
   const page = seg[0] || 'home';
   const R = { html: '', hub: 'home', leaf: 'home', title: '홈', memo: '', page, seg, params };
@@ -2230,11 +2275,11 @@ function resolveRoute(nav) {
     if (nav) chaptersTab = params.get('tab') === 'grammar' ? 'grammar' : 'list';
     Object.assign(R, { html: viewChapters(), hub: 'learn', leaf: chaptersTab === 'grammar' ? 'learn-grammar' : 'learn-list', title: chaptersTab === 'grammar' ? '문법 색인' : '학습' });
   } else if (page === 'study') {
-    const id = Math.min(Math.max(Number(seg[1]) || 1, 1), CHAPTERS.length);
+    const id = clampChapter(seg[1]);
     const ch = chapterOf(id);
     Object.assign(R, { html: viewStudy(id), hub: 'learn', leaf: 'learn-list', title: ch ? `${pad2(id)}. ${ch.title}` : '학습' });
   } else if (page === 'grammar') {
-    const gid = Math.min(Math.max(Number(seg[1]) || 1, 1), CHAPTERS.length);
+    const gid = clampChapter(seg[1]);
     Object.assign(R, { html: viewGrammar(gid), hub: 'learn', leaf: 'learn-grammar', title: `문법 ${pad2(gid)}` });
   } else if (page === 'all') {
     Object.assign(R, { html: viewAll(), hub: 'learn', leaf: 'learn-all', title: '전체 문장' });
@@ -2245,10 +2290,11 @@ function resolveRoute(nav) {
       // 홈/학습에서 진입 시 소스 사전 선택
       const src = params.get('src');
       if (src && ['random', 'chapter', 'weak', 'book'].includes(src)) {
-        const pool = poolFor(src, Number(params.get('ch')) || quizSetup.ch);
+        const chq = chapterNo(params.get('ch'));                 // 잘못된 과 번호는 무시하고 기존 선택을 쓴다
+        const pool = poolFor(src, chq || quizSetup.ch);
         if (!((src === 'weak' || src === 'book') && !pool.length)) {
           quizSetup.src = src; quizSetup.kind = 'sentence';
-          if (params.get('ch')) quizSetup.ch = Number(params.get('ch'));
+          if (chq) quizSetup.ch = chq;
         }
       }
     }
@@ -2261,7 +2307,8 @@ function resolveRoute(nav) {
       const asrc = params.get('src');
       if (asrc && ['chapter', 'all', 'book', 'weak'].includes(asrc)) {
         S.settings.auto.src = asrc;
-        if (params.get('ch')) S.settings.auto.ch = Number(params.get('ch'));
+        const chq = chapterNo(params.get('ch'));
+        if (chq) S.settings.auto.ch = chq;
       }
     }
     Object.assign(R, { html: viewAutoSetup(), hub: 'practice', leaf: 'practice-auto', title: '자동 듣기' });
@@ -2300,17 +2347,17 @@ function syncNav(R) {
 }
 
 // 상태 변경 후 다시 그릴 때 키보드 포커스를 같은 컨트롤로 되돌린다
-function focusKeyOf(el) {
-  if (!el || !el.dataset || !el.dataset.action || !app.contains(el)) return null;
+function focusKeyOf(el, scope = app) {
+  if (!el || !el.dataset || !el.dataset.action || !scope.contains(el)) return null;
   return { action: el.dataset.action, data: JSON.stringify(el.dataset) };
 }
-function restoreFocus(k) {
+function restoreFocus(k, scope = app) {
   if (!k) return;
-  const cand = $$(`[data-action="${k.action}"]`, app).find(e => JSON.stringify(e.dataset) === k.data);
+  const cand = $$(`[data-action="${k.action}"]`, scope).find(e => JSON.stringify(e.dataset) === k.data);
   if (cand) cand.focus({ preventScroll: true });
 }
 
-function mount(R, { nav = false, viaVT = false } = {}) {
+function mount(R, { nav = false, first = false } = {}) {
   if (!R.html) return;
   const prevY = window.scrollY;
   const snap = snapSegs(app);
@@ -2326,7 +2373,7 @@ function mount(R, { nav = false, viaVT = false } = {}) {
   if (nav) {
     document.body.classList.remove('dock-hidden');
     const focusN = R.page === 'study' ? R.params.get('focus') : null;
-    const el = focusN ? $('#s-' + focusN) : null;
+    const el = focusN ? document.getElementById('s-' + focusN) : null;   // 선택자 문자열 조립 없이 id로 조회
     if (el) {
       requestAnimationFrame(() => { el.scrollIntoView({ block: 'center', behavior: 'instant' }); el.classList.add('flash'); });
     } else {
@@ -2346,9 +2393,11 @@ function mount(R, { nav = false, viaVT = false } = {}) {
       });
     }
     const page = app.firstElementChild;
-    if (page && !viaVT) page.classList.add('enter');           // View Transitions 미지원 시의 대체 진입 효과
-    app.focus({ preventScroll: true });
-    const ann = $('#route-announcer'); if (ann) ann.textContent = document.title;
+    if (page) page.classList.add('enter');                      // 새 화면이 아래에서 스프링으로 떠오른다(전환 효과 유무와 무관)
+    if (!first) {                                              // 처음 열 때는 포커스를 건드리지 않아 첫 Tab이 '본문 바로가기'에 닿는다
+      app.focus({ preventScroll: true });
+      const ann = $('#route-announcer'); if (ann) ann.textContent = document.title;
+    }
     // 같은 허브 안에서 탭을 옮길 때: 탭 썸이 이전 위치에서 새 위치로 미끄러진다
     const hubOnly = {}; Object.keys(snap).forEach(k => { if (k.startsWith('hub-')) hubOnly[k] = snap[k]; });
     flipSegs(app, hubOnly);
@@ -2397,16 +2446,14 @@ function render(opts) { mount(resolveRoute(false), opts); }
 function navigate() {
   const R = resolveRoute(true);
   if (!R.html) return;                 // 리다이렉트 중 — 곧 hashchange가 다시 호출된다
-  const vt = !!(document.startViewTransition && !reduceMotion());
-  const go = () => mount(R, { nav: true, viaVT: vt });
-  if (vt) document.startViewTransition(go); else go();
+  runVT(() => mount(R, { nav: true }));
 }
 
 /* ---------- 부분 갱신 ---------- */
 function refreshStudyProgress() {
   const { seg } = parseHash();
   if (seg[0] !== 'study') return;
-  const ch = chapterOf(Number(seg[1]) || 1);
+  const ch = chapterOf(clampChapter(seg[1]));
   if (!ch) return;
   const p = chapterProgress(ch);
   const bar = $('#ch-bar'); const done = $('#ch-done');
@@ -2416,7 +2463,7 @@ function refreshStudyProgress() {
 
 function toggleLearn(n, btn) {
   const on = !P.learned[n];
-  if (on) { P.learned[n] = 1; touchActivity(n); haptic(8); } else { delete P.learned[n]; save(); }
+  if (on) { P.learned[n] = 1; haptic(8); touchActivity(n); } else { delete P.learned[n]; save(); }   // 목표 달성 진동이 마지막에 오도록
   const card = $('#s-' + n);
   if (card) card.classList.toggle('is-learned', on);
   if (btn) {
@@ -2444,20 +2491,23 @@ function toggleBook(n, btn) {
 document.addEventListener('click', e => {
   if (swallowClick) { swallowClick = false; e.preventDefault(); e.stopPropagation(); return; }
 
+  // 본문 바로가기(스킵 링크): 주소 해시를 건드리지 않고 본문으로 포커스만 옮긴다
+  if (e.target.closest('.skip-link')) { e.preventDefault(); app.focus(); return; }
+
   // 하단 독: 다른 허브 = 그 허브에서 마지막으로 보던 화면 / 지금 허브 다시 누르기 = 허브 처음 화면(이미 처음이면 맨 위로)
   const dockLink = e.target.closest('.dock a[data-hub]');
   if (dockLink) {
     e.preventDefault();
     const hub = dockLink.dataset.hub, root0 = HUB_ROOT[hub];
     if (hub === currentHub) {
-      if (location.hash === root0 || (hub === 'home' && (location.hash === '' || location.hash === '#/'))) window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (location.hash === root0 || (hub === 'home' && (location.hash === '' || location.hash === '#/'))) window.scrollTo({ top: 0, behavior: scrollBehavior() });
       else location.hash = root0;
     } else location.hash = hubLast[hub] || root0;
     return;
   }
   // 사이드바에서 현재 화면을 다시 누르면 맨 위로
   const railLink = e.target.closest('.rail-link[aria-current="page"]');
-  if (railLink && railLink.getAttribute('href') === location.hash) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (railLink && railLink.getAttribute('href') === location.hash) { e.preventDefault(); window.scrollTo({ top: 0, behavior: scrollBehavior() }); return; }
 
   const t = e.target.closest('[data-action]');
   if (!t || t.disabled) return;
@@ -2466,7 +2516,7 @@ document.addEventListener('click', e => {
   switch (act) {
     case 'toggle-theme': {
       const dark = root.dataset.theme === 'dark';
-      withVT('theme', () => { S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); renderSettings(); });
+      runVT(() => { S.settings.theme = dark ? 'light' : 'dark'; save(); applyTheme(); renderSettings(); }, 'theme');
       break;
     }
     case 'open-course-menu': openCourseMenu(); break;
@@ -2480,7 +2530,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'set-theme':
-      withVT('theme', () => { S.settings.theme = t.dataset.theme; save(); applyTheme(); renderSettings(); });
+      runVT(() => { S.settings.theme = t.dataset.theme; save(); applyTheme(); renderSettings(); }, 'theme');
       break;
     case 'font-inc': S.settings.scale = Math.min(1.25, Math.round((S.settings.scale + 0.05) * 100) / 100); save(); applyScale(); renderSettings(); break;
     case 'font-dec': S.settings.scale = Math.max(0.85, Math.round((S.settings.scale - 0.05) * 100) / 100); save(); applyScale(); renderSettings(); break;
@@ -2542,7 +2592,7 @@ document.addEventListener('click', e => {
     case 'filter': chapterFilter = t.dataset.filter; render(); break;
     case 'all-filter': allFilter = t.dataset.filter; render(); break;
     case 'all-state': allState = t.dataset.state; render(); break;
-    case 'to-top': window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+    case 'to-top': window.scrollTo({ top: 0, behavior: scrollBehavior() }); break;
     case 'search-clear': {
       searchQuery = '';
       const si = $('#search-input'); if (si) { si.value = ''; si.focus(); }
@@ -2691,7 +2741,7 @@ document.addEventListener('change', e => {
   const j = e.target.closest('[data-action="all-jump"]');
   if (j && j.value) {
     const el = $('#all-ch-' + j.value);
-    if (el) el.scrollIntoView({ behavior: reduceMotion() ? 'instant' : 'smooth', block: 'start' });
+    if (el) el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     j.value = '';
   }
   const sj = e.target.closest('[data-action="study-ch-jump"]');
@@ -2699,7 +2749,7 @@ document.addEventListener('change', e => {
   const wj = e.target.closest('[data-action="words-jump-select"]');
   if (wj && wj.value) {
     const el = document.getElementById('words-sec-' + wj.value);
-    if (el) el.scrollIntoView({ behavior: reduceMotion() ? 'instant' : 'smooth', block: 'start' });
+    if (el) el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     wj.value = '';
   }
 });
@@ -2714,7 +2764,7 @@ document.addEventListener('keydown', e => {
   if (e.target.matches('input, select, textarea')) return;
 
   // 자동 듣기
-  if (seg[0] === 'auto' && seg[1] === 'run' && autoPlayer) {
+  if (seg[0] === 'auto' && seg[1] === 'run' && autoPlayer && !sheetEl.open && !confirmEl.open) {
     if (e.code === 'Space') { e.preventDefault(); autoToggle(); }
     else if (e.code === 'ArrowRight') { e.preventDefault(); autoJump(1); }
     else if (e.code === 'ArrowLeft') { e.preventDefault(); autoJump(-1); }
@@ -2722,7 +2772,9 @@ document.addEventListener('keydown', e => {
   }
   // 암기 카드
   if (seg[0] === 'quiz' && seg[1] === 'run' && quizSession && quizSession.idx < quizSession.items.length && !sheetEl.open && !confirmEl.open) {
-    if ((e.code === 'Space' || e.code === 'Enter') && !quizSession.flipped) { e.preventDefault(); flipQuizCard(); }
+    // 카드가 아닌 다른 컨트롤(그만두기 버튼 등)에 포커스가 있을 땐 Enter/Space가 그 컨트롤 고유 동작을 하도록 둔다
+    const onOtherControl = e.target.id !== 'flip-card' && !!e.target.closest('button, a[href], summary, [role="button"]');
+    if ((e.code === 'Space' || e.code === 'Enter') && !quizSession.flipped) { if (onOtherControl) return; e.preventDefault(); flipQuizCard(); }
     else if (quizSession.flipped) {
       if (e.code === 'ArrowRight' || e.key.toLowerCase() === 'o') { e.preventDefault(); answerQuiz(true); }
       else if (e.code === 'ArrowLeft' || e.key.toLowerCase() === 'x') { e.preventDefault(); answerQuiz(false); }
@@ -2761,9 +2813,12 @@ window.addEventListener('hashchange', navigate);
     tgt = el; px = e.clientX; py = e.clientY; apply();
     if (e.pointerType === 'touch') {
       el.classList.add('lit');
-      const off = () => setTimeout(() => el.classList.remove('lit'), 420);
-      document.addEventListener('pointerup', off, { once: true });
-      document.addEventListener('pointercancel', off, { once: true });
+      const off = () => {                                    // 둘 중 먼저 오는 쪽에서 둘 다 해제(리스너가 쌓이지 않게)
+        document.removeEventListener('pointerup', off); document.removeEventListener('pointercancel', off);
+        setTimeout(() => el.classList.remove('lit'), 420);
+      };
+      document.addEventListener('pointerup', off);
+      document.addEventListener('pointercancel', off);
     }
   }, { passive: true });
 })();
@@ -2786,13 +2841,23 @@ function onScroll() {
 }
 window.addEventListener('scroll', () => { if (!scrollTick) { scrollTick = true; requestAnimationFrame(onScroll); } }, { passive: true });
 
+/* ---------- 일본어 덩어리에 lang="ja" ---------- */
+// 스크린리더가 일본어 음성으로 읽고, 폰트 대체 시에도 일본어 자형이 고르게 선택되도록 새로 그려진 .jp에 자동으로 단다
+const tagJa = node => {
+  if (node.nodeType !== 1) return;
+  if (node.matches('.jp:not([lang])')) node.lang = 'ja';
+  node.querySelectorAll('.jp:not([lang])').forEach(e => { e.lang = 'ja'; });
+};
+new MutationObserver(recs => recs.forEach(r => r.addedNodes.forEach(tagJa))).observe(document.body, { childList: true, subtree: true });
+tagJa(document.body);
+
 /* ---------- 시작 ---------- */
 applyTheme();
 applyScale();
 updateCourseControl();
 updateRailStatus();
 if (!location.hash) history.replaceState(null, '', location.pathname + location.search + '#/');
-mount(resolveRoute(true), { nav: true });
+mount(resolveRoute(true), { nav: true, first: true });
 mountInAppBanner();   // 인앱 브라우저면 음성 안내 배너 표시
 
 })();
