@@ -387,6 +387,7 @@
   .dock a[aria-current="page"] .ic { transform: translateY(-1px) scale(1.06); stroke-width: 2; }
   .dock a:active .ic { transform: scale(.88); }
   body.dock-hidden .dock { transform: translateY(calc(100% + 28px)); }
+  body.dock-hidden .dock:focus-within { transform: none; }   /* 키보드 포커스가 들어오면 다시 보인다 */
   @media (pointer: coarse) {
     body:has(input[type="search"]:focus, input[type="text"]:focus) .dock { transform: translateY(calc(100% + 28px)); }
   }
@@ -397,10 +398,10 @@
     display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%;
     background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
     color: var(--ink-2); border: 1px solid var(--edge); box-shadow: var(--hi), var(--sh-2);
-    opacity: 0; transform: translateY(14px) scale(.9); pointer-events: none;
-    transition: opacity .25s, transform .5s var(--spring-soft), color .2s;
+    opacity: 0; visibility: hidden; transform: translateY(14px) scale(.9); pointer-events: none;   /* 숨겨진 동안은 Tab 순서에서도 빠진다 */
+    transition: opacity .25s, transform .5s var(--spring-soft), color .2s, visibility 0s linear .5s;
   }
-  .to-top.show { opacity: 1; transform: none; pointer-events: auto; }
+  .to-top.show { opacity: 1; visibility: visible; transform: none; pointer-events: auto; transition-delay: 0s; }
   @media (hover: hover) { .to-top:hover { color: var(--accent); } }
   body.dock-hidden .to-top { bottom: max(18px, env(safe-area-inset-bottom)); }
 
@@ -769,6 +770,7 @@
     border: 1px solid var(--edge-hi); border-bottom: 0; border-radius: var(--r-6) var(--r-6) 0 0;
     box-shadow: var(--hi), var(--sh-3); touch-action: pan-y;
   }
+  .sheet-grip, .sheet-head { touch-action: none; }   /* 손잡이·제목줄은 브라우저 스크롤 대신 끌어 닫기 제스처를 받는다 */
   .sheet-grip { width: 40px; height: 5px; margin: 4px auto 8px; border-radius: 3px; background: var(--line-2); flex: none; }
   .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 12px; flex: none; }
   .sheet-head h2 { font-size: 20px; font-weight: 780; letter-spacing: -.03em; }
@@ -862,21 +864,18 @@
   @keyframes toast-out { to { opacity: 0; transform: translateY(10px) scale(.96); } }
 
   /* 인앱 브라우저 음성 안내 */
-  .inapp-banner {
-    position: fixed; z-index: 90; left: 50%; transform: translateX(-50%);
-    bottom: calc(var(--dock-space) + 14px);
-    width: min(620px, calc(100% - 24px));
+  .inapp-banner {      /* 본문 위에 흐름대로 놓인다 — 하단 독·시작 바와 겹치지 않음 */
     display: flex; align-items: flex-start; gap: 10px; padding: 13px 12px 13px 16px;
+    width: min(880px, calc(100% - 36px)); margin: 14px auto -6px;
     border-radius: var(--r-4); background: var(--glass-solid); border: 1px solid var(--edge-hi);
-    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
-    box-shadow: var(--sh-3); font-size: 13px; line-height: 1.6; color: var(--ink-2);
+    box-shadow: var(--sh-2); font-size: 13px; line-height: 1.6; color: var(--ink-2);
   }
   .inapp-banner b { color: var(--gold-text); }
   .iab-ico { color: var(--gold-text); margin-top: 2px; }
   .iab-txt { flex: 1; min-width: 0; }
   .iab-x { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: color-mix(in oklab, var(--ink) 9%, transparent); color: var(--ink-2); }
   .iab-x .ic { width: 16px; height: 16px; }
-  @media (min-width: 960px) { .inapp-banner { bottom: 18px; } }
+  @media (min-width: 960px) { .inapp-banner { width: min(880px, calc(100% - 2 * clamp(28px, 3.4vw, 56px))); margin: 26px auto -22px; } }
 }
 /* ---------- pages: 홈 (벤토) ---------- */
 @layer pages {
@@ -1493,28 +1492,25 @@
 @layer motion {
   :root { interpolate-size: allow-keywords; }
 
-  /* View Transitions 미지원 환경의 대체 진입 효과 */
+  /* 새 화면 진입 효과 (View Transitions 지원 여부와 무관) */
   .page.enter { animation: page-in .55s var(--spring-soft) both; }
   @keyframes page-in { from { opacity: 0; transform: translateY(16px); } }
   .flip-scene { animation: card-in .6s var(--spring-soft) both; }
   @keyframes card-in { from { opacity: 0; transform: translateX(40px) scale(.96); } }
 
-  /* View Transitions — 화면 전환 시 본문만 이어지고 상단바·독은 그대로 */
+  /* View Transitions — 화면 전체(root)를 가볍게 교차한다.
+     이름 붙인 그룹을 두지 않아 상단바·독·시트와의 겹침 순서나 위치 보간 문제가 생기지 않고,
+     옛 화면이 위에서 사라지며 새 화면(항상 불투명)이 아래에 있어 교차 중 밝기가 꺼지지도 않는다.
+     전환 중에는 오버레이가 포인터를 가로채므로 짧게(.2s) — 본문이 떠오르는 움직임은 .page.enter가 맡는다.
+     코스·테마 전환(html[data-vt])은 터치할 일이 없는 순간이라 조금 길게(.5s). */
   @supports (view-transition-name: none) {
-    #app { view-transition-name: page; }
-    ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-    ::view-transition-old(page) { animation: vt-out .16s ease-in both; }
-    ::view-transition-new(page) { animation: vt-in .55s var(--spring-soft) both; }
-    /* 코스·테마 전환: 화면 전체가 부드럽게 교차 */
-    html[data-vt]::view-transition-old(root) { animation: vt-fade-out .5s ease-in-out both; }
-    html[data-vt]::view-transition-new(root) { animation: vt-fade-in .5s ease-in-out both; }
-    html[data-vt]::view-transition-old(page) { animation: vt-fade-out .5s ease-in-out both; }
-    html[data-vt]::view-transition-new(page) { animation: vt-fade-in .5s ease-in-out both; }
+    html { --vt-d: .2s; }
+    html[data-vt] { --vt-d: .5s; }
+    ::view-transition-group(root) { animation-duration: var(--vt-d); }
+    ::view-transition-old(root) { z-index: 2; mix-blend-mode: normal; animation: vt-fade-out var(--vt-d) ease-out both; }
+    ::view-transition-new(root) { z-index: 1; mix-blend-mode: normal; animation: none; }
   }
-  @keyframes vt-out { to { opacity: 0; transform: translateY(-6px); } }
-  @keyframes vt-in { from { opacity: 0; transform: translateY(18px); } }
   @keyframes vt-fade-out { to { opacity: 0; } }
-  @keyframes vt-fade-in { from { opacity: 0; } }
 
   /* 접이식 문법 해설 — 높이 애니메이션(지원 브라우저) */
   @supports selector(::details-content) {
@@ -1526,6 +1522,7 @@
   dialog.sheet[open] .sheet-panel { animation: sheet-in .6s var(--spring-soft) both; }
   dialog.sheet[open]::backdrop { animation: fade-in .3s ease both; }
   dialog.sheet.closing .sheet-panel { animation: sheet-out .2s ease-in both; }
+  dialog.sheet.closing.dragged .sheet-panel { animation: none; }   /* 끌어 내려 닫을 땐 끌던 위치에서 이어서(인라인 transition) */
   dialog.sheet.closing::backdrop { animation: fade-out .2s ease both; }
   @keyframes sheet-in { from { opacity: 0; transform: translateY(48px) scale(.985); } }
   @keyframes sheet-out { to { opacity: 0; transform: translateY(36px) scale(.985); } }
@@ -1557,6 +1554,7 @@
   @media (prefers-reduced-transparency: reduce) {
     :root, html[data-theme="dark"] { --glass: var(--glass-solid); --blur: none; }
     .topbar { background: var(--bg); }
+    .dock, .start-bar, .toast, .ch-group-h, .rail-panel, .sheet-panel, .to-top, .stickbar { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
   }
   /* 대비 높이기 */
   @media (prefers-contrast: more) {
@@ -1574,5 +1572,13 @@
     .seg-thumb, .dock-thumb { border: 2px solid Highlight; }
     .btn-primary, .opt.active { border: 2px solid Highlight; }
     .bar > i, .ring-bar { forced-color-adjust: none; }
+    /* 배경·그림자로만 표현하던 '선택됨' 상태를 윤곽선으로 */
+    .chip-btn.active, .chip-btn[aria-pressed="true"], .rail-link[aria-current="page"], .course-opt[aria-current],
+    .ch-row.resume, .dock a[aria-current="page"] { outline: 2px solid Highlight; outline-offset: -2px; }
+    /* 스위치: 트랙·손잡이를 시스템 색으로 */
+    .switch { border: 2px solid ButtonText; }
+    .switch::after { background: ButtonText; box-shadow: none; }
+    .switch[aria-checked="true"] { background: Highlight; border-color: Highlight; box-shadow: none; }
+    .switch[aria-checked="true"]::after { background: HighlightText; }
   }
 }
